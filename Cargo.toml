@@ -17,7 +17,3 @@ plotters = "0.3"       # For visualization
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports"] }
-
-[[bench]]
-name = "sensor_benchmark"
-harness = false
