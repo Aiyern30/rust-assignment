@@ -8,11 +8,9 @@ use tokio::time;
 pub struct SensorGenerator {
     sensor_id: String,
     sensor_type: SensorType,
-    sample_rate_ms: u64, // Time between samples in milliseconds
-    base_value: f64,     // Base value for the sensor
-    noise_level: f64,    // Standard deviation of noise
-    drift_factor: f64,   // How quickly the base value drifts
-    rng: SmallRng,       // Use SmallRng instead of ThreadRng
+    sample_rate_ms: u64,
+    drift_factor: f64,
+    rng: SmallRng,
     normal_dist: Normal<f64>,
     last_value: f64,
 }
@@ -32,8 +30,7 @@ impl SensorGenerator {
             sensor_id: sensor_id.to_string(),
             sensor_type,
             sample_rate_ms,
-            base_value,
-            noise_level,
+
             drift_factor,
             rng: SmallRng::from_entropy(), // Initialize with entropy
             normal_dist,
