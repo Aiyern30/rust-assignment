@@ -2,7 +2,7 @@ use crate::common::data_types::{PerformanceMetrics, SensorData, SensorType};
 use rand::rngs::SmallRng; // This now works with the `small_rng` feature
 use rand::{Rng, SeedableRng}; // Added SeedableRng
 use rand_distr::{Distribution, Normal}; // Correct source of Normal
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time;
 
 pub struct SensorGenerator {
