@@ -2,6 +2,7 @@ mod actuator;
 mod common;
 mod config;
 mod sensor;
+
 use actuator::system::run_actuator_system;
 use clap::{Parser, Subcommand};
 use crossbeam_channel::{bounded, unbounded};
@@ -35,12 +36,14 @@ enum Commands {
         #[arg(short, long)]
         sample_rate: Option<u64>,
     },
+
     /// Generate default configuration file
     GenConfig {
         /// Path to output configuration file
         #[arg(short, long, value_name = "FILE")]
         output: PathBuf,
     },
+
     /// Run benchmarks
     Benchmark {
         /// Number of iterations for benchmarking
@@ -70,17 +73,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 None => config::Config::default(),
             };
 
-            // Override configuration with command line arguments
+            // Override config with CLI args
             config.transmitter.connection_type = mode;
-
-            if let Some(endpoint) = endpoint {
-                config.transmitter.endpoint = endpoint;
+            if let Some(ep) = endpoint {
+                config.transmitter.endpoint = ep;
             }
-
             if let Some(rate) = sample_rate {
                 config.sensor.sample_rate_ms = rate;
             }
 
+            // Display current config
             println!("Starting sensor system with configuration:");
             println!("  Sample rate: {}ms", config.sensor.sample_rate_ms);
             println!("  Connection type: {}", config.transmitter.connection_type);
@@ -93,26 +95,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
 
-            // Create channels for communication between components
+            // Channels between components
             let (sensor_tx, sensor_rx) = bounded::<common::data_types::SensorData>(100);
             let (processed_tx, processed_rx) = bounded::<common::data_types::SensorData>(100);
             let (metrics_tx, metrics_rx) = unbounded::<common::data_types::PerformanceMetrics>();
             let (actuator_tx, actuator_rx) = bounded::<common::data_types::SensorData>(100);
             let (feedback_tx, feedback_rx) = unbounded::<common::data_types::ActuatorFeedback>();
+            let feedback_tx_clone = feedback_tx.clone();
 
-            let actuator_metrics_tx = metrics_tx.clone(); // if actuator sends metrics too
-
+            // Spawn actuator system
             tokio::spawn(async move {
                 run_actuator_system(actuator_rx, feedback_tx).await;
             });
 
-            // Start metrics collector
+            // Spawn metrics collector
             let metrics_config = config.metrics.clone();
             tokio::spawn(async move {
                 common::metrics::run_metrics_collector(&metrics_config, metrics_rx).await;
             });
 
-            // Start sensor data generator
+            // Spawn sensor generator
             let sensor_config = config.sensor.clone();
             let sensor_metrics_tx = metrics_tx.clone();
             tokio::spawn(async move {
@@ -120,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .await;
             });
 
-            // Start data processor
+            // Spawn processor
             let processor_config = config.processor.clone();
             let processor_metrics_tx = metrics_tx.clone();
             tokio::spawn(async move {
@@ -133,53 +135,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .await;
             });
 
-            // Start data transmitter
+            // Spawn transmitter
             let transmitter_config = config.transmitter.clone();
             let transmitter_metrics_tx = metrics_tx.clone();
+            let feedback_tx_for_transmitter = feedback_tx_clone;
+
             tokio::spawn(async move {
                 sensor::transmitter::run_transmitter(
                     &transmitter_config,
                     processed_rx,
                     Some(actuator_tx),
                     transmitter_metrics_tx,
-                    Some(feedback_tx),
+                    Some(feedback_tx_for_transmitter),
                 )
                 .await;
             });
 
-            // Keep running until interrupted
+            // Keep running
             println!("System running. Press Ctrl+C to stop.");
             tokio::signal::ctrl_c().await?;
             println!("Shutting down...");
         }
+
         Commands::GenConfig { output } => {
             let config = config::Config::default();
             config.save_to_file(output.to_str().unwrap())?;
             println!("Default configuration saved to {:?}", output);
         }
+
         Commands::Benchmark { iterations, output } => {
             println!("Running benchmarks with {} iterations", iterations);
 
-            // Load default configuration
             let _config = config::Config::default();
             let (_sensor_tx, _sensor_rx) = bounded::<common::data_types::SensorData>(100);
             let (_processed_tx, _processed_rx) = bounded::<common::data_types::SensorData>(100);
             let (_metrics_tx, _metrics_rx) = unbounded::<common::data_types::PerformanceMetrics>();
 
-            // Create sensor for benchmarking - updated to match the fixed generator implementation
+            // Setup benchmarking sensor
             let mut generator = sensor::generator::SensorGenerator::new(
                 "bench_sensor",
                 common::data_types::SensorType::Force,
-                1, // 1ms sample rate for benchmarking
+                1,
                 10.0,
                 0.2,
                 0.01,
             );
 
-            // Create processor for benchmarking
             let mut processor = sensor::processor::DataProcessor::new(20);
 
-            // Run benchmark
+            // Benchmark generation
             println!("Benchmarking sensor data generation...");
             let start = std::time::Instant::now();
             for _ in 0..iterations {
@@ -187,14 +191,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let generation_time = start.elapsed();
 
-            // Generate test data for processor benchmark
+            // Generate test data
             let mut test_data = Vec::new();
             for _ in 0..iterations {
                 let (data, _) = generator.generate_reading();
                 test_data.push(data);
             }
 
-            // Benchmark processor
+            // Benchmark processing
             println!("Benchmarking data processing...");
             let start = std::time::Instant::now();
             for data in test_data {
@@ -202,7 +206,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let processing_time = start.elapsed();
 
-            // Report results
+            // Show results
             println!("Benchmark Results:");
             println!(
                 "  Sensor data generation: {:?} for {} iterations ({:?} per iteration)",
@@ -217,7 +221,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 processing_time / iterations as u32
             );
 
-            // Save results to file
+            // Save to file
             let results = format!(
                 "Benchmark Results:\n\
                  Iterations: {}\n\
