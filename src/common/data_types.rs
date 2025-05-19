@@ -12,6 +12,18 @@ pub struct SensorData {
     pub confidence: f64,          // Confidence level (0.0-1.0)
 }
 
+pub struct ControlCommand {
+    /// Type of control command, e.g., "start", "stop", "adjust_position", etc.
+    pub command_type: String,
+
+    /// Optional parameter or payload (e.g., target position, speed value)
+    pub payload: Option<String>,
+
+    /// Timestamp (e.g., milliseconds since epoch) when command was generated
+    pub timestamp: u128,
+    pub value: f64, // add this
+}
+
 // Types of sensors we might simulate
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum SensorType {

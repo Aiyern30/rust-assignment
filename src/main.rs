@@ -1,7 +1,7 @@
+mod actuator;
 mod common;
 mod config;
 mod sensor;
-
 use clap::{Parser, Subcommand};
 use crossbeam_channel::{bounded, unbounded};
 use std::path::PathBuf;
