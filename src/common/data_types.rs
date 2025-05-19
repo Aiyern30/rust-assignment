@@ -13,7 +13,7 @@ pub struct SensorData {
 }
 
 // Types of sensors we might simulate
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum SensorType {
     Force,       // Force sensor (Newtons)
     Position,    // Position sensor (mm)

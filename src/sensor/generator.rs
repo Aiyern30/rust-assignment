@@ -1,6 +1,7 @@
 use crate::common::data_types::{PerformanceMetrics, SensorData, SensorType};
-use rand::distributions::{Distribution, Normal};
-use rand::Rng;
+use rand::rngs::SmallRng; // This now works with the `small_rng` feature
+use rand::{Rng, SeedableRng}; // Added SeedableRng
+use rand_distr::{Distribution, Normal}; // Correct source of Normal
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::time;
 
@@ -11,8 +12,8 @@ pub struct SensorGenerator {
     base_value: f64,     // Base value for the sensor
     noise_level: f64,    // Standard deviation of noise
     drift_factor: f64,   // How quickly the base value drifts
-    rng: rand::rngs::ThreadRng,
-    normal_dist: Normal,
+    rng: SmallRng,       // Use SmallRng instead of ThreadRng
+    normal_dist: Normal<f64>,
     last_value: f64,
 }
 
@@ -34,7 +35,7 @@ impl SensorGenerator {
             base_value,
             noise_level,
             drift_factor,
-            rng: rand::thread_rng(),
+            rng: SmallRng::from_entropy(), // Initialize with entropy
             normal_dist,
             last_value: base_value,
         }
@@ -148,16 +149,29 @@ pub async fn run_sensor_array(
         0.002,                     // Drift factor
     );
 
-    // Spawn tasks for each sensor
-    handles.push(tokio::spawn(
-        force_sensor.run(tx.clone(), metrics_tx.clone()),
-    ));
-    handles.push(tokio::spawn(
-        position_sensor.run(tx.clone(), metrics_tx.clone()),
-    ));
-    handles.push(tokio::spawn(
-        temp_sensor.run(tx.clone(), metrics_tx.clone()),
-    ));
+    handles.push(tokio::spawn({
+        let tx = tx.clone();
+        let metrics_tx = metrics_tx.clone();
+        async move {
+            force_sensor.run(tx, metrics_tx).await;
+        }
+    }));
+
+    handles.push(tokio::spawn({
+        let tx = tx.clone();
+        let metrics_tx = metrics_tx.clone();
+        async move {
+            position_sensor.run(tx, metrics_tx).await;
+        }
+    }));
+
+    handles.push(tokio::spawn({
+        let tx = tx.clone();
+        let metrics_tx = metrics_tx.clone();
+        async move {
+            temp_sensor.run(tx, metrics_tx).await;
+        }
+    }));
 
     // Wait for all sensors to complete (they run indefinitely in this case)
     for handle in handles {
