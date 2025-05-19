@@ -2,52 +2,62 @@ use crate::actuator::controller::PIDController;
 use crate::actuator::executor::Executor;
 use crate::actuator::receiver::ReceiverTask;
 use crate::actuator::scheduler::Scheduler;
-use crate::common::data_types::SensorData;
+use crate::common::data_types::{ActuatorFeedback, ActuatorStatus, SensorData};
 use crate::common::metrics::MetricsCollector;
 use crate::config::MetricsConfig;
-use crossbeam_channel::Receiver;
+use crossbeam_channel::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-pub fn run_actuator_system(rx: Receiver<SensorData>) {
-    // Create a MetricsConfig instance — fill these fields according to your config struct definition
+pub async fn run_actuator_system(rx: Receiver<SensorData>, feedback_tx: Sender<ActuatorFeedback>) {
     let metrics_config = MetricsConfig {
-        report_interval_ms: 60_000, // 60 seconds in milliseconds
+        report_interval_ms: 60_000,
         log_to_file: false,
         log_file: String::new(),
     };
 
-    // Create MetricsCollector with config, wrapped in Arc for sharing
     let metrics: Arc<MetricsCollector> = Arc::new(MetricsCollector::new(&metrics_config));
     let mut receiver_task = ReceiverTask::new(rx, Arc::clone(&metrics));
 
-    // Create shared controller and executor
     let controller: Arc<Mutex<PIDController>> =
-        Arc::new(Mutex::new(PIDController::new(1.0, 0.1, 0.05))); // You must implement PIDController::new
+        Arc::new(Mutex::new(PIDController::new(1.0, 0.1, 0.05)));
     let executor: Arc<Executor> = Arc::new(Executor::new());
 
-    // Start receiver thread
+    // Spawn thread for receiving sensor data
     std::thread::spawn(move || {
         receiver_task.run();
     });
 
-    // Scheduler to run control loop every 5 ms
     let scheduler = Scheduler::new(5);
 
-    // Clone Arcs to move into closure
     let controller_clone = Arc::clone(&controller);
     let executor_clone = Arc::clone(&executor);
+    let feedback_tx_clone = feedback_tx.clone();
 
-    // Start scheduled control loop
     scheduler.start(move || {
-        // TODO: Replace with real sensor data from shared state/channel
-        let sensor_value = 42.0; // Placeholder
+        let sensor_value = 42.0; // Placeholder, replace with real data
         let setpoint = 50.0;
-        let dt = 0.005; // 5 ms in seconds
+        let dt = 0.005;
 
         let mut ctrl = controller_clone.lock().unwrap();
         let command = ctrl.compute(setpoint, sensor_value, dt);
 
         executor_clone.execute(command);
+
+        // Get current timestamp in milliseconds since epoch
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_millis();
+
+        let feedback = ActuatorFeedback {
+            timestamp,
+            actuator_id: "actuator_1".to_string(),
+            status: ActuatorStatus::Normal,
+            message: Some("Command executed successfully".to_string()),
+        };
+
+        // Send feedback, ignoring errors
+        let _ = feedback_tx_clone.send(feedback);
     });
 }
