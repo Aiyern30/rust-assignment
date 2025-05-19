@@ -1,4 +1,35 @@
+# Ignore the target directory
 /target
+
+# Ignore Cargo.lock if this is a library (keep it for binaries)
 /Cargo.lock
-*.rs.bk
-*.rs.swp
+
+# Ignore IDE/editor files
+**/*.rs.bk
+**/*.rs.swp
+**/*.sw?
+**/*~
+**/.vscode/
+**/.idea/
+.DS_Store
+
+# Ignore backup and temp files
+*.tmp
+*.bak
+*.old
+*.log
+
+# By default, ignore compiled files and artifacts
+*.rlib
+*.dSYM
+*.exe
+*.out
+*.a
+*.so
+*.dll
+*.d
+
+# Ignore coverage and testing artifacts
+/coverage/
+/htmlcov/
+/*.profraw
