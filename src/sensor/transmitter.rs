@@ -82,7 +82,10 @@ impl DataTransmitter {
     }
 
     // Send data to the actuator system
-    pub async fn send_data(&self, data: &SensorData) -> Result<PerformanceMetrics, Box<dyn Error>> {
+    pub async fn send_data(
+        &self,
+        data: &SensorData,
+    ) -> Result<PerformanceMetrics, Box<dyn Error + Send + Sync + 'static>> {
         let mut metrics = PerformanceMetrics::new("data_transmission");
 
         if !self.connected {
@@ -188,7 +191,7 @@ pub async fn run_transmitter(
     feedback_tx: Option<crossbeam_channel::Sender<ActuatorFeedback>>,
 ) {
     // Create and configure transmitter
-    let mut transmitter = match config.connection_type.as_str() {
+    let transmitter = match config.connection_type.as_str() {
         "tcp" => {
             let mut tx =
                 DataTransmitter::new(ConnectionType::TcpSocket).with_tcp_endpoint(&config.endpoint);
@@ -223,10 +226,10 @@ pub async fn run_transmitter(
         // Try to receive processed data
         match rx.recv() {
             Ok(data) => {
-                let start = Instant::now();
+                let start = std::time::Instant::now();
 
-                // For CrossbeamChannel, send directly through the channel
                 if let ConnectionType::CrossbeamChannel = transmitter.connection_type {
+                    // For CrossbeamChannel, send directly through the channel
                     if let Some(tx) = &actuator_tx {
                         if tx.send(data.clone()).is_err() {
                             println!("Actuator channel closed, stopping transmitter.");
@@ -240,17 +243,36 @@ pub async fn run_transmitter(
                     let _ = metrics_tx.send(metrics);
                 } else {
                     // For other connection types, use the transmitter
-                    match transmitter.send_data(&data).await {
-                        Ok(metrics) => {
-                            let _ = metrics_tx.send(metrics);
-                        }
-                        Err(e) => {
-                            println!("Failed to send data: {}", e);
-                            let mut metrics = PerformanceMetrics::new("data_transmission");
-                            metrics.complete(false);
-                            let _ = metrics_tx.send(metrics);
+                    let mut attempts = 0;
+                    let max_attempts = 3;
+                    let mut success = false;
+                    let mut final_metrics = PerformanceMetrics::new("data_transmission");
+
+                    while attempts < max_attempts {
+                        match transmitter.send_data(&data).await {
+                            Ok(metrics) => {
+                                final_metrics = metrics;
+                                final_metrics.complete(true);
+                                success = true;
+                                break;
+                            }
+                            Err(e) => {
+                                // Convert error to String immediately for Send safety
+                                let err_msg = e.to_string();
+                                attempts += 1;
+                                println!(
+                                    "Attempt {}/{}: Failed to send data: {}",
+                                    attempts, max_attempts, err_msg
+                                );
+                                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                            }
                         }
                     }
+
+                    if !success {
+                        final_metrics.complete(false);
+                    }
+                    let _ = metrics_tx.send(final_metrics);
                 }
 
                 // Check if transmission took too long
