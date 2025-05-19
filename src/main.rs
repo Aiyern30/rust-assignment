@@ -2,6 +2,7 @@ mod actuator;
 mod common;
 mod config;
 mod sensor;
+use actuator::system::run_actuator_system;
 use clap::{Parser, Subcommand};
 use crossbeam_channel::{bounded, unbounded};
 use std::path::PathBuf;
@@ -96,11 +97,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let (sensor_tx, sensor_rx) = bounded::<common::data_types::SensorData>(100);
             let (processed_tx, processed_rx) = bounded::<common::data_types::SensorData>(100);
             let (metrics_tx, metrics_rx) = unbounded::<common::data_types::PerformanceMetrics>();
-            let (feedback_tx, _feedback_rx) = unbounded::<common::data_types::ActuatorFeedback>();
+            let (actuator_tx, actuator_rx) = bounded::<common::data_types::SensorData>(100);
+            let (feedback_tx, feedback_rx) = unbounded::<common::data_types::ActuatorFeedback>();
 
-            // Create channel for direct communication with actuator (Student B's code)
-            // This is only used if connection_type is "channel"
-            let (actuator_tx, _actuator_rx) = bounded::<common::data_types::SensorData>(100);
+            let actuator_metrics_tx = metrics_tx.clone(); // if actuator sends metrics too
+
+            tokio::spawn(async move {
+                run_actuator_system(actuator_rx, feedback_tx).await;
+            });
 
             // Start metrics collector
             let metrics_config = config.metrics.clone();
