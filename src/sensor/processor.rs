@@ -7,13 +7,13 @@ pub struct DataProcessor {
     // Moving average filters for each sensor
     moving_averages: HashMap<String, Stats<f64>>,
     // Window size for moving average calculation (not used directly by Stats)
-    window_size: usize,
+    _window_size: usize,
     // Anomaly detection thresholds for each sensor type
     anomaly_thresholds: HashMap<SensorType, f64>,
 }
 
 impl DataProcessor {
-    pub fn new(window_size: usize) -> Self {
+    pub fn new(_window_size: usize) -> Self {
         let mut anomaly_thresholds = HashMap::new();
 
         // Set default thresholds for each sensor type
@@ -24,7 +24,7 @@ impl DataProcessor {
 
         Self {
             moving_averages: HashMap::new(),
-            window_size,
+            _window_size,
             anomaly_thresholds,
         }
     }
@@ -86,7 +86,7 @@ impl DataProcessor {
         (processed_data, metrics)
     }
 
-    // Allow external adjustment of thresholds
+    #[allow(dead_code)]
     pub fn adjust_threshold(&mut self, sensor_type: SensorType, new_threshold: f64) {
         self.anomaly_thresholds.insert(sensor_type, new_threshold);
     }
