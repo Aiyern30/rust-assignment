@@ -157,12 +157,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Running benchmarks with {} iterations", iterations);
 
             // Load default configuration
-            let config = config::Config::default();
-
-            // Create channels for benchmarking
-            let (sensor_tx, sensor_rx) = bounded::<common::data_types::SensorData>(100);
-            let (processed_tx, processed_rx) = bounded::<common::data_types::SensorData>(100);
-            let (metrics_tx, metrics_rx) = unbounded::<common::data_types::PerformanceMetrics>();
+            let _config = config::Config::default();
+            let (_sensor_tx, _sensor_rx) = bounded::<common::data_types::SensorData>(100);
+            let (_processed_tx, _processed_rx) = bounded::<common::data_types::SensorData>(100);
+            let (_metrics_tx, _metrics_rx) = unbounded::<common::data_types::PerformanceMetrics>();
 
             // Create sensor for benchmarking - updated to match the fixed generator implementation
             let mut generator = sensor::generator::SensorGenerator::new(
