@@ -47,7 +47,7 @@ impl SensorGenerator {
 
         // Add some drift to simulate real sensor behavior
         let drift = (self.rng.gen_range(0.0..1.0) - 0.5) * self.drift_factor;
-        self.last_value = self.last_value + drift;
+        self.last_value += drift;
 
         // Calculate the final value
         let value = self.last_value + noise;

@@ -30,7 +30,7 @@ impl MetricsCollector {
     // Add a new metrics record
     pub fn add_metrics(&self, metrics: PerformanceMetrics) {
         let mut metrics_lock = self.metrics.lock().unwrap();
-        let entry = metrics_lock.entry(metrics.operation.clone()).or_insert_with(Vec::new);
+        let entry = metrics_lock.entry(metrics.operation.clone()).or_default();
         entry.push(metrics);
     }
     
@@ -123,7 +123,7 @@ impl MetricsCollector {
                  "Max Duration(ms)", "Jitter(ms)", "Missed Deadlines");
         println!("{:-<130}", "");
         
-        for (_, stats) in report {
+        for stats in report.values() {
             println!("{:<20} | {:<10} | {:<10.2} | {:<15.3} | {:<15.3} | {:<15.3} | {:<10.3} | {:<15}", 
                      stats.operation, stats.total_operations, stats.success_rate, 
                      stats.avg_duration, stats.min_duration, stats.max_duration, 
@@ -160,7 +160,7 @@ impl MetricsCollector {
             }
             
             // Write data
-            for (_, stats) in report {
+            for stats in report.values() {
                 let line = format!(
                     "{:<20} | {:<10} | {:<10.2} | {:<15.3} | {:<15.3} | {:<15.3} | {:<10.3} | {:<15}\n", 
                     stats.operation, stats.total_operations, stats.success_rate, 

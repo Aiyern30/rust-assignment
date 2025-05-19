@@ -37,7 +37,7 @@ impl DataProcessor {
         let moving_avg = self
             .moving_averages
             .entry(raw_data.sensor_id.clone())
-            .or_insert_with(Stats::new);
+            .or_default();
 
         // Add current value to moving average
         // FIXED: Changed from push() to update()
