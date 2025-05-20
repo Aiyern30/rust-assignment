@@ -66,6 +66,10 @@ pub async fn run_processor(
 ) {
     let mut processor = DataProcessor::new(config.window_size);
 
+    let mut prev_duration = None;
+    let mut durations = vec![];
+    let max_samples = 1000;
+
     loop {
         match rx.recv() {
             Ok(raw_data) => {
@@ -73,15 +77,48 @@ pub async fn run_processor(
 
                 let (processed_data, metrics) = processor.process(raw_data);
 
-                let _ = metrics_tx.send(metrics);
+                let elapsed = start.elapsed();
+                let elapsed_ns = elapsed.as_nanos();
 
-                let processing_time = start.elapsed();
-                if processing_time.as_millis() > 2 {
+                // Calculate jitter if previous duration exists
+                if let Some(prev) = prev_duration {
+                    let jitter = if elapsed_ns > prev {
+                        elapsed_ns - prev
+                    } else {
+                        prev - elapsed_ns
+                    };
+                    // You can log or keep jitter statistics here
                     println!(
-                        "⚠️  Warning: Processing took too long: {:?}",
-                        processing_time
+                        "[Processor Timing] Processing time: {} ns, Jitter: {} ns",
+                        elapsed_ns, jitter
+                    );
+                } else {
+                    println!("[Processor Timing] Processing time: {} ns", elapsed_ns);
+                }
+
+                prev_duration = Some(elapsed_ns);
+
+                // Store durations for stats
+                durations.push(elapsed_ns);
+                if durations.len() > max_samples {
+                    durations.remove(0);
+                }
+
+                // Periodically print stats (e.g., every 100 cycles)
+                if durations.len() % 100 == 0 {
+                    let min = durations.iter().min().unwrap();
+                    let max = durations.iter().max().unwrap();
+                    let avg = durations.iter().sum::<u128>() / durations.len() as u128;
+                    println!(
+                        "[Processor Stats] Min: {} ns, Max: {} ns, Avg: {} ns, Samples: {}",
+                        min,
+                        max,
+                        avg,
+                        durations.len()
                     );
                 }
+
+                let _ = metrics_tx.send(metrics);
 
                 if tx.send(processed_data).is_err() {
                     println!("❌ Transmitter has been dropped, stopping processor.");
