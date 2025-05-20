@@ -17,47 +17,62 @@ pub async fn run_actuator_system(rx: Receiver<SensorData>, feedback_tx: Sender<A
     };
 
     let metrics: Arc<MetricsCollector> = Arc::new(MetricsCollector::new(&metrics_config));
-    let mut receiver_task = ReceiverTask::new(rx, Arc::clone(&metrics));
 
     let controller: Arc<Mutex<PIDController>> =
         Arc::new(Mutex::new(PIDController::new(1.0, 0.1, 0.05)));
     let executor: Arc<Executor> = Arc::new(Executor::new());
 
-    // Spawn thread for receiving sensor data
+    // === NEW: Shared sensor data storage ===
+    let latest_sensor_data: Arc<Mutex<Option<SensorData>>> = Arc::new(Mutex::new(None));
+
+    // === Modified ReceiverTask to update shared data ===
+    let sensor_data_clone = Arc::clone(&latest_sensor_data);
+    let metrics_clone = Arc::clone(&metrics);
+
     std::thread::spawn(move || {
-        receiver_task.run();
+        loop {
+            if let Ok(data) = rx.recv() {
+                *sensor_data_clone.lock().unwrap() = Some(data);
+                // metrics_clone.record_sensor_data(&data); // Optional metric collection
+            }
+        }
     });
 
+    // === Scheduler to process control loop ===
     let scheduler = Scheduler::new(5);
-
     let controller_clone = Arc::clone(&controller);
     let executor_clone = Arc::clone(&executor);
     let feedback_tx_clone = feedback_tx.clone();
+    let data_for_scheduler = Arc::clone(&latest_sensor_data);
 
     scheduler.start(move || {
-        let sensor_value = 42.0; // Placeholder, replace with real data
-        let setpoint = 50.0;
-        let dt = 0.005;
+        let maybe_data = data_for_scheduler.lock().unwrap().clone();
 
-        let mut ctrl = controller_clone.lock().unwrap();
-        let command = ctrl.compute(setpoint, sensor_value, dt);
+        if let Some(data) = maybe_data {
+            let sensor_value = data.value;
+            let setpoint = 50.0;
+            let dt = 0.005;
 
-        executor_clone.execute(command);
+            let mut ctrl = controller_clone.lock().unwrap();
+            let command = ctrl.compute(setpoint, sensor_value, dt);
 
-        // Get current timestamp in milliseconds since epoch
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_millis();
+            let command_clone = command.clone();
+            executor_clone.execute(command_clone);
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_millis();
 
-        let feedback = ActuatorFeedback {
-            timestamp,
-            actuator_id: "actuator_1".to_string(),
-            status: ActuatorStatus::Normal,
-            message: Some("Command executed successfully".to_string()),
-        };
-
-        // Send feedback, ignoring errors
-        let _ = feedback_tx_clone.send(feedback);
+            let feedback = ActuatorFeedback {
+                timestamp,
+                actuator_id: "actuator_1".to_string(),
+                status: ActuatorStatus::Normal,
+                message: Some(format!(
+                    "Executed command {:?} for sensor {:.2}",
+                    command, sensor_value
+                )),
+            };
+            let _ = feedback_tx_clone.send(feedback);
+        }
     });
 }
