@@ -7,6 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::time;
 
+use super::data_types::SensorData;
+
 // Metrics collector for benchmarking performance
 pub struct MetricsCollector {
     metrics: Arc<Mutex<HashMap<String, Vec<PerformanceMetrics>>>>,
@@ -33,6 +35,19 @@ impl MetricsCollector {
         let entry = metrics_lock.entry(metrics.operation.clone()).or_default();
         entry.push(metrics);
     }
+    pub fn record_sensor_data(&self, _data: &SensorData) {
+    let now = Instant::now();
+    
+    let metrics = PerformanceMetrics {
+        operation: "sensor_data_received".to_string(),
+        start_time: now,
+        end_time: Some(now), // or `None` if the operation is still in progress
+        duration_ms: Some(0.0), // You can calculate actual duration if needed
+        success: true,
+    };
+
+    self.add_metrics(metrics);
+}
     
     // Generate a report of current metrics
     pub fn generate_report(&self) -> HashMap<String, OperationStats> {
