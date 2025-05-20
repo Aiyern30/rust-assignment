@@ -1,4 +1,6 @@
-use crate::common::data_types::{ActuatorFeedback, PerformanceMetrics, SensorData};
+use crate::common::data_types::{
+    ActuatorCommand, ActuatorFeedback, PerformanceMetrics, SensorData,
+};
 use serde_json;
 use std::error::Error;
 use std::sync::Arc;
@@ -185,7 +187,7 @@ impl DataTransmitter {
 pub async fn run_transmitter(
     config: &crate::config::TransmitterConfig,
     rx: crossbeam_channel::Receiver<SensorData>,
-    actuator_tx: Option<crossbeam_channel::Sender<SensorData>>,
+    actuator_tx: Option<crossbeam_channel::Sender<ActuatorCommand>>,
     metrics_tx: crossbeam_channel::Sender<PerformanceMetrics>,
     feedback_tx: Option<crossbeam_channel::Sender<ActuatorFeedback>>,
 ) {
@@ -228,9 +230,9 @@ pub async fn run_transmitter(
                 let start = std::time::Instant::now();
 
                 if let ConnectionType::CrossbeamChannel = transmitter.connection_type {
-                    // For CrossbeamChannel, send directly through the channel
                     if let Some(tx) = &actuator_tx {
-                        if tx.send(data.clone()).is_err() {
+                        let command = ActuatorCommand::from_sensor_data(&data); // You need to implement this conversion
+                        if tx.send(command).is_err() {
                             println!("Actuator channel closed, stopping transmitter.");
                             break;
                         }

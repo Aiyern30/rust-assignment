@@ -1,12 +1,20 @@
-use crate::common::data_types::{PerformanceMetrics, SensorData, SensorType};
+use crate::common::data_types::{
+    ActuatorCommand, ControlCommand, PerformanceMetrics, SensorData, SensorType,
+};
 use rolling_stats::Stats;
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub struct DataProcessor {
     moving_averages: HashMap<String, Stats<f64>>,
     _window_size: usize,
     anomaly_thresholds: HashMap<SensorType, f64>,
+}
+fn current_timestamp_ms() -> u64 {
+    let now = SystemTime::now();
+    now.duration_since(UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_millis() as u64
 }
 
 impl DataProcessor {
@@ -51,6 +59,23 @@ impl DataProcessor {
         metrics.complete(true);
         (raw_data, metrics)
     }
+    pub fn generate_actuator_command(&self, sensor_data: &SensorData) -> Option<ActuatorCommand> {
+        if sensor_data.is_anomaly {
+            Some(ActuatorCommand {
+                actuator_id: sensor_data.sensor_id.clone(),
+                control_command: ControlCommand {
+                    command_type: "adjust_position".to_string(),
+                    payload: Some("new_target_position".to_string()),
+                    timestamp: current_timestamp_ms() as u128,
+                    value: sensor_data.value,
+                },
+                priority: 1,
+                deadline: Instant::now() + Duration::from_millis(2),
+            })
+        } else {
+            None
+        }
+    }
 
     #[allow(dead_code)]
     pub fn adjust_threshold(&mut self, sensor_type: SensorType, new_threshold: f64) {
@@ -63,6 +88,7 @@ pub async fn run_processor(
     rx: crossbeam_channel::Receiver<SensorData>,
     tx: crossbeam_channel::Sender<SensorData>,
     metrics_tx: crossbeam_channel::Sender<PerformanceMetrics>,
+    actuator_tx: crossbeam_channel::Sender<ActuatorCommand>, // New channel sender for actuator commands
 ) {
     let mut processor = DataProcessor::new(config.window_size);
 
@@ -77,6 +103,14 @@ pub async fn run_processor(
 
                 let (processed_data, metrics) = processor.process(raw_data);
 
+                // Generate actuator command if anomaly detected
+                if let Some(act_cmd) = processor.generate_actuator_command(&processed_data) {
+                    if actuator_tx.send(act_cmd).is_err() {
+                        println!("❌ Actuator command channel closed, stopping processor.");
+                        break;
+                    }
+                }
+
                 let elapsed = start.elapsed();
                 let elapsed_ns = elapsed.as_nanos();
 
@@ -87,7 +121,6 @@ pub async fn run_processor(
                     } else {
                         prev - elapsed_ns
                     };
-                    // You can log or keep jitter statistics here
                     println!(
                         "[Processor Timing] Processing time: {} ns, Jitter: {} ns",
                         elapsed_ns, jitter
