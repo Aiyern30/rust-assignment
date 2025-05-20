@@ -4,18 +4,24 @@ use crate::common::{
     data_types::{PerformanceMetrics, SensorData},
     metrics::MetricsCollector,
 };
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub struct ReceiverTask {
     rx: Receiver<SensorData>,
     metrics_collector: Arc<MetricsCollector>, // Use Arc for shared ownership
+    shared_sensor_data: Arc<Mutex<Option<SensorData>>>,
 }
 
 impl ReceiverTask {
-    pub fn new(rx: Receiver<SensorData>, metrics_collector: Arc<MetricsCollector>) -> Self {
+    pub fn new(
+        rx: Receiver<SensorData>,
+        metrics_collector: Arc<MetricsCollector>,
+        shared_sensor_data: Arc<Mutex<Option<SensorData>>>,
+    ) -> Self {
         Self {
             rx,
             metrics_collector,
+            shared_sensor_data,
         }
     }
 
@@ -23,6 +29,12 @@ impl ReceiverTask {
         println!("Actuator receiver started.");
         while let Ok(sensor_data) = self.rx.recv() {
             let start_time = std::time::Instant::now();
+
+            // Update the shared sensor data
+            {
+                let mut data_lock = self.shared_sensor_data.lock().unwrap();
+                *data_lock = Some(sensor_data.clone());
+            }
 
             // Process sensor_data here
             println!("Received sensor data: {:?}", sensor_data);
