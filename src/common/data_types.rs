@@ -11,7 +11,7 @@ pub struct SensorData {
     pub is_anomaly: bool,         // Flag for anomalies
     pub confidence: f64,          // Confidence level (0.0-1.0)
 }
-
+#[derive(Debug, Clone)]
 pub struct ControlCommand {
     /// Type of control command, e.g., "start", "stop", "adjust_position", etc.
     pub command_type: String,
