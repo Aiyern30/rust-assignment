@@ -78,3 +78,29 @@ impl PerformanceMetrics {
         self.success = success;
     }
 }
+
+impl SensorData {
+    /// Detects if the value is anomalous based on z-score and thresholds.
+    /// Requires mean and std_dev to calculate z-score.
+    pub fn detect_anomaly(&mut self, mean: f64, std_dev: f64, threshold: f64) {
+        if std_dev > 0.0 {
+            let z_score = (self.value - mean).abs() / std_dev;
+            self.is_anomaly = z_score > threshold;
+
+            let mut confidence = 1.0 - (z_score / (threshold * 2.0)).min(0.9);
+            confidence = confidence.max(0.1);
+
+            if self.is_anomaly {
+                println!(
+                    "[ANOMALY] Sensor: {}, Value: {:.2}, Mean: {:.2}, StdDev: {:.2}, Z-score: {:.2}, Confidence: {:.2}",
+                    self.sensor_id, self.value, mean, std_dev, z_score, confidence
+                );
+            }
+
+            self.confidence = confidence;
+        } else {
+            self.is_anomaly = false;
+            self.confidence = 0.0;
+        }
+    }
+}
