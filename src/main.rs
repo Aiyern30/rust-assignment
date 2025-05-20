@@ -102,6 +102,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let (actuator_tx, actuator_rx) = bounded::<common::data_types::SensorData>(100);
             let (feedback_tx, feedback_rx) = unbounded::<common::data_types::ActuatorFeedback>();
             let feedback_tx_clone = feedback_tx.clone();
+            tokio::spawn(async move {
+                while let Ok(feedback) = feedback_rx.recv() {
+                    println!("Received actuator feedback: {:?}", feedback);
+                    // Handle the feedback (e.g., log it, update UI, etc.)
+                }
+            });
 
             // Spawn actuator system
             tokio::spawn(async move {
