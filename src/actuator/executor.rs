@@ -8,7 +8,13 @@ impl Executor {
     }
 
     pub fn execute(&self, command: ControlCommand) {
-        println!("Executing control command with value: {}", command.value);
-        // TODO: Add real actuator interface here
+        println!(
+            "[{}] Executing {} command with value: {:.4}",
+            command.timestamp, command.command_type, command.value
+        );
+
+        if let Some(payload) = &command.payload {
+            println!("Payload: {}", payload);
+        }
     }
 }
