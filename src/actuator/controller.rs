@@ -2,7 +2,6 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use crate::common::data_types::ControlCommand;
-use crate::common::data_types::SensorData;
 
 pub struct PIDController {
     kp: f64,

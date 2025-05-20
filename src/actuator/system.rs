@@ -7,7 +7,7 @@ use crate::common::metrics::MetricsCollector;
 use crate::config::MetricsConfig;
 use crossbeam_channel::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub async fn run_actuator_system(rx: Receiver<SensorData>, feedback_tx: Sender<ActuatorFeedback>) {
     let metrics_config = MetricsConfig {
