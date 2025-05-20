@@ -8,6 +8,8 @@ use crossbeam_channel::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use super::receiver::ReceiverTask;
+
 pub async fn run_actuator_system(rx: Receiver<SensorData>, feedback_tx: Sender<ActuatorFeedback>) {
     let metrics_config = MetricsConfig {
         report_interval_ms: 60_000,
@@ -21,19 +23,15 @@ pub async fn run_actuator_system(rx: Receiver<SensorData>, feedback_tx: Sender<A
         Arc::new(Mutex::new(PIDController::new(1.0, 0.1, 0.05)));
     let executor: Arc<Executor> = Arc::new(Executor::new());
 
-    // === NEW: Shared sensor data storage ===
     let latest_sensor_data: Arc<Mutex<Option<SensorData>>> = Arc::new(Mutex::new(None));
 
-    // === Modified ReceiverTask to update shared data ===
     let sensor_data_clone = Arc::clone(&latest_sensor_data);
     let metrics_clone = Arc::clone(&metrics);
 
-    std::thread::spawn(move || loop {
-        if let Ok(data) = rx.recv() {
-            let data_for_metrics = data.clone();
-            *sensor_data_clone.lock().unwrap() = Some(data);
-            metrics_clone.record_sensor_data(&data_for_metrics);
-        }
+    let mut receiver_task = ReceiverTask::new(rx, metrics_clone, sensor_data_clone);
+
+    std::thread::spawn(move || {
+        receiver_task.run();
     });
 
     // === Scheduler to process control loop ===
