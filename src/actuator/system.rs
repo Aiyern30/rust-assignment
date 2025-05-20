@@ -1,6 +1,5 @@
 use crate::actuator::controller::PIDController;
 use crate::actuator::executor::Executor;
-use crate::actuator::receiver::ReceiverTask;
 use crate::actuator::scheduler::Scheduler;
 use crate::common::data_types::{ActuatorFeedback, ActuatorStatus, SensorData};
 use crate::common::metrics::MetricsCollector;
@@ -29,12 +28,11 @@ pub async fn run_actuator_system(rx: Receiver<SensorData>, feedback_tx: Sender<A
     let sensor_data_clone = Arc::clone(&latest_sensor_data);
     let metrics_clone = Arc::clone(&metrics);
 
-    std::thread::spawn(move || {
-        loop {
-            if let Ok(data) = rx.recv() {
-                *sensor_data_clone.lock().unwrap() = Some(data);
-                // metrics_clone.record_sensor_data(&data); // Optional metric collection
-            }
+    std::thread::spawn(move || loop {
+        if let Ok(data) = rx.recv() {
+            let data_for_metrics = data.clone();
+            *sensor_data_clone.lock().unwrap() = Some(data);
+            metrics_clone.record_sensor_data(&data_for_metrics);
         }
     });
 
