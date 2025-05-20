@@ -13,15 +13,18 @@ pub struct SensorData {
 }
 #[derive(Debug, Clone)]
 pub struct ControlCommand {
-    /// Type of control command, e.g., "start", "stop", "adjust_position", etc.
     pub command_type: String,
-
-    /// Optional parameter or payload (e.g., target position, speed value)
     pub payload: Option<String>,
-
-    /// Timestamp (e.g., milliseconds since epoch) when command was generated
     pub timestamp: u128,
-    pub value: f64, // add this
+    pub value: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct ActuatorCommand {
+    pub actuator_id: String,
+    pub control_command: ControlCommand,
+    pub priority: u8,
+    pub deadline: Instant,
 }
 
 // Types of sensors we might simulate
@@ -101,6 +104,46 @@ impl SensorData {
         } else {
             self.is_anomaly = false;
             self.confidence = 0.0;
+        }
+    }
+}
+
+impl ActuatorCommand {
+    pub fn from_sensor_data(data: &SensorData) -> Self {
+        // Determine actuator_id from sensor_id (example logic)
+        let actuator_id = format!("actuator_for_{}", data.sensor_id);
+
+        // Example: command_type depends on sensor reading type
+        let command_type = match data.reading_type {
+            SensorType::Force => "AdjustForce",
+            SensorType::Position => "MovePosition",
+            SensorType::Velocity => "SetVelocity",
+            SensorType::Temperature => "RegulateTemperature",
+        }
+        .to_string();
+
+        // Payload could be some JSON or string representing the command parameters,
+        // here we just serialize the value as string for simplicity
+        let payload = Some(format!("{{\"value\": {:.2}}}", data.value));
+
+        // Set priority higher if anomaly detected, else default 5
+        let priority = if data.is_anomaly { 10 } else { 5 };
+
+        // Deadline example: 1 second from now
+        let deadline = Instant::now() + std::time::Duration::from_secs(1);
+
+        let control_command = ControlCommand {
+            command_type,
+            payload,
+            timestamp: data.timestamp,
+            value: data.value,
+        };
+
+        ActuatorCommand {
+            actuator_id,
+            control_command,
+            priority,
+            deadline,
         }
     }
 }
