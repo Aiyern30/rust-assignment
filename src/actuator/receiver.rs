@@ -29,6 +29,7 @@ impl ReceiverTask {
         println!("Actuator receiver started.");
         while let Ok(sensor_data) = self.rx.recv() {
             let start_time = std::time::Instant::now();
+            self.metrics_collector.record_sensor_data(&sensor_data);
 
             // Update the shared sensor data
             {
