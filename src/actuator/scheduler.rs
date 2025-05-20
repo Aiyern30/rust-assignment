@@ -16,17 +16,17 @@ impl Scheduler {
     where
         F: FnMut() + Send + 'static,
     {
+        let interval = self.interval;
         thread::spawn(move || {
             let mut next_instant = Instant::now();
             loop {
-                next_instant += Duration::from_millis(5);
+                next_instant += interval;
                 task();
 
                 let now = Instant::now();
                 if next_instant > now {
                     thread::sleep(next_instant - now);
                 } else {
-                    // Missed deadline, just continue without sleep
                     next_instant = now;
                 }
             }
