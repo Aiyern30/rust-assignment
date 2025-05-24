@@ -1,9 +1,9 @@
-// benches/sensor_benchmark.rs
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::Criterion;
 
-fn dummy_benchmark(c: &mut Criterion) {
-    c.bench_function("dummy", |b| b.iter(|| 1 + 2));
+pub fn benchmark_sensor(c: &mut Criterion) {
+    c.bench_function("dummy_sensor_benchmark", |b| {
+        b.iter(|| {
+            let _ = 2 + 2;
+        })
+    });
 }
-
-criterion_group!(benches, dummy_benchmark);
-criterion_main!(benches);
