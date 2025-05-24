@@ -20,6 +20,34 @@ pub fn benchmark_processor(c: &mut Criterion) {
     });
 }
 
-// Include all benchmarks in one group
-criterion_group!(benches, benchmark_processor);
+pub fn benchmark_serialization(c: &mut Criterion) {
+    // Benchmark JSON serialization (what transmitter does)
+    c.bench_function("json_serialization", |b| {
+        let data = SensorData {
+            sensor_id: "S1".to_string(),
+            reading_type: SensorType::Force,
+            value: 10.0,
+            timestamp: 0,
+            is_anomaly: false,
+            confidence: 1.0,
+        };
+        
+        b.iter(|| {
+            let serialized = black_box(serde_json::to_string(&data).unwrap());
+            black_box(serialized);
+        });
+    });
+
+    // Benchmark JSON deserialization 
+    c.bench_function("json_deserialization", |b| {
+        let json_str = r#"{"sensor_id":"S1","reading_type":"Force","value":10.0,"timestamp":0,"is_anomaly":false,"confidence":1.0}"#;
+        
+        b.iter(|| {
+            let data: SensorData = black_box(serde_json::from_str(json_str).unwrap());
+            black_box(data);
+        });
+    });
+}
+
+criterion_group!(benches, benchmark_processor, benchmark_serialization);
 criterion_main!(benches);
