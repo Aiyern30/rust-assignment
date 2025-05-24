@@ -5,8 +5,10 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1.28", features = ["full", "time"] }
-crossbeam-channel = "0.5"
-rand = { version = "0.8", features = ["small_rng"] }
+lapin = {version = "2.5.3", features = ["serde_json"]}
+futures = "0.3"
+crossbeam-channel = "0.5.15"
+rand = { version = "0.8.5", features = ["small_rng"] }
 rand_distr = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -15,6 +17,9 @@ rolling-stats = "0.7.0"
 criterion = "0.6"
 chrono = "0.4"
 plotters = "0.3"
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.11.8"
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports"] }
@@ -24,3 +29,11 @@ criterion = { version = "0.6", features = ["html_reports"] }
 name = "criterion_main"
 path = "benches/criterion_main.rs"
 harness = false
+
+[[bin]]
+name = "sensor"
+path = "src/bin/sensor.rs"
+
+[[bin]]
+name = "actuator"
+path = "src/bin/actuator.rs"

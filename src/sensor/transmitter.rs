@@ -1,6 +1,9 @@
+use crate::common::constants::{ACTUATOR_COMMAND_QUEUE, ACTUATOR_FEEDBACK_QUEUE};
 use crate::common::data_types::{
     ActuatorCommand, ActuatorFeedback, PerformanceMetrics, SensorData,
 };
+use crossbeam_channel::{Receiver, Sender};
+use lapin::{options::*, types::FieldTable, BasicProperties, Connection, ConnectionProperties};
 use serde_json;
 use std::error::Error;
 use std::sync::Arc;
@@ -184,128 +187,195 @@ impl DataTransmitter {
 }
 
 // Function to run the transmitter in real-time
+// pub async fn run_transmitter(
+//     config: &crate::config::TransmitterConfig,
+//     rx: crossbeam_channel::Receiver<SensorData>,
+//     actuator_tx: Option<crossbeam_channel::Sender<ActuatorCommand>>,
+//     metrics_tx: crossbeam_channel::Sender<PerformanceMetrics>,
+//     feedback_tx: Option<crossbeam_channel::Sender<ActuatorFeedback>>,
+// ) {
+//     // Create and configure transmitter
+//     let transmitter = match config.connection_type.as_str() {
+//         "tcp" => {
+//             let mut tx =
+//                 DataTransmitter::new(ConnectionType::TcpSocket).with_tcp_endpoint(&config.endpoint);
+
+//             // Try to connect
+//             if let Err(e) = tx.connect().await {
+//                 println!("Failed to connect transmitter: {}", e);
+//                 return;
+//             }
+//             tx
+//         }
+//         "shared_memory" => {
+//             let mut tx = DataTransmitter::new(ConnectionType::SharedMemory)
+//                 .with_shared_memory(&config.shared_mem_name);
+
+//             // Try to connect
+//             if let Err(e) = tx.connect().await {
+//                 println!("Failed to connect transmitter: {}", e);
+//                 return;
+//             }
+//             tx
+//         }
+//         "channel" => DataTransmitter::new(ConnectionType::CrossbeamChannel),
+//         _ => {
+//             println!("Unknown connection type: {}", config.connection_type);
+//             return;
+//         }
+//     };
+
 pub async fn run_transmitter(
-    config: &crate::config::TransmitterConfig,
-    rx: crossbeam_channel::Receiver<SensorData>,
-    actuator_tx: Option<crossbeam_channel::Sender<ActuatorCommand>>,
-    metrics_tx: crossbeam_channel::Sender<PerformanceMetrics>,
-    feedback_tx: Option<crossbeam_channel::Sender<ActuatorFeedback>>,
-) {
-    // Create and configure transmitter
-    let transmitter = match config.connection_type.as_str() {
-        "tcp" => {
-            let mut tx =
-                DataTransmitter::new(ConnectionType::TcpSocket).with_tcp_endpoint(&config.endpoint);
+    command_rx: Receiver<ActuatorCommand>,
+    feedback_tx: Sender<ActuatorFeedback>,
+) -> anyhow::Result<()> {
+    let conn =
+        Connection::connect("amqp://127.0.0.1:5672/%2f", ConnectionProperties::default()).await?;
+    let channel = conn.create_channel().await?;
 
-            // Try to connect
-            if let Err(e) = tx.connect().await {
-                println!("Failed to connect transmitter: {}", e);
-                return;
-            }
-            tx
-        }
-        "shared_memory" => {
-            let mut tx = DataTransmitter::new(ConnectionType::SharedMemory)
-                .with_shared_memory(&config.shared_mem_name);
+    channel
+        .queue_declare(
+            ACTUATOR_COMMAND_QUEUE,
+            QueueDeclareOptions::default(),
+            FieldTable::default(),
+        )
+        .await?;
 
-            // Try to connect
-            if let Err(e) = tx.connect().await {
-                println!("Failed to connect transmitter: {}", e);
-                return;
-            }
-            tx
-        }
-        "channel" => DataTransmitter::new(ConnectionType::CrossbeamChannel),
-        _ => {
-            println!("Unknown connection type: {}", config.connection_type);
-            return;
-        }
-    };
+    channel
+        .queue_declare(
+            ACTUATOR_FEEDBACK_QUEUE,
+            QueueDeclareOptions::default(),
+            FieldTable::default(),
+        )
+        .await?;
 
-    // Process and transmit data in real time
-    loop {
-        // Try to receive processed data
-        match rx.recv() {
-            Ok(data) => {
-                let start = std::time::Instant::now();
+    // Listen for feedback
+    let feedback_channel = channel.clone();
+    let tx_clone = feedback_tx.clone();
+    tokio::spawn(async move {
+        use futures::StreamExt; // ⬅ Add this line to fix `.next()`
+        let mut consumer = feedback_channel
+            .basic_consume(
+                ACTUATOR_FEEDBACK_QUEUE,
+                "sensor_consumer",
+                BasicConsumeOptions::default(),
+                FieldTable::default(),
+            )
+            .await
+            .unwrap();
 
-                if let ConnectionType::CrossbeamChannel = transmitter.connection_type {
-                    if let Some(tx) = &actuator_tx {
-                        let command = ActuatorCommand::from_sensor_data(&data); // You need to implement this conversion
-                        if tx.send(command).is_err() {
-                            println!("Actuator channel closed, stopping transmitter.");
-                            break;
-                        }
-                    }
-
-                    // Record metrics
-                    let mut metrics = PerformanceMetrics::new("data_transmission");
-                    metrics.complete(true);
-                    let _ = metrics_tx.send(metrics);
-                } else {
-                    // For other connection types, use the transmitter
-                    let mut attempts = 0;
-                    let max_attempts = 3;
-                    let mut success = false;
-                    let mut final_metrics = PerformanceMetrics::new("data_transmission");
-
-                    while attempts < max_attempts {
-                        match transmitter.send_data(&data).await {
-                            Ok(metrics) => {
-                                final_metrics = metrics;
-                                final_metrics.complete(true);
-                                success = true;
-                                break;
-                            }
-                            Err(e) => {
-                                // Convert error to String immediately for Send safety
-                                let err_msg = e.to_string();
-                                attempts += 1;
-                                println!(
-                                    "Attempt {}/{}: Failed to send data: {}",
-                                    attempts, max_attempts, err_msg
-                                );
-                                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                            }
-                        }
-                    }
-
-                    if !success {
-                        final_metrics.complete(false);
-                    }
-                    let _ = metrics_tx.send(final_metrics);
+        while let Some(delivery) = consumer.next().await {
+            if let Ok(delivery) = delivery {
+                if let Ok(feedback) = serde_json::from_slice::<ActuatorFeedback>(&delivery.data) {
+                    tx_clone.send(feedback).ok();
                 }
-
-                // Check if transmission took too long
-                let transmission_time = start.elapsed();
-                if transmission_time.as_millis() > 1 {
-                    println!(
-                        "Warning: Transmission took too long: {:?}",
-                        transmission_time
-                    );
-                }
-
-                // Try to receive feedback
-                if let ConnectionType::CrossbeamChannel = transmitter.connection_type {
-                    // Feedback would come through a separate channel
-                    // No implementation for now
-                } else if let Some(tx) = &feedback_tx {
-                    match transmitter.receive_feedback().await {
-                        Ok(feedback) => {
-                            if tx.send(feedback).is_err() {
-                                println!("Feedback channel closed.");
-                            }
-                        }
-                        Err(_) => {
-                            // No feedback available or error
-                        }
-                    }
-                }
-            }
-            Err(_) => {
-                println!("Processor channel closed, stopping transmitter.");
-                break;
+                delivery.ack(BasicAckOptions::default()).await.unwrap();
             }
         }
+    });
+
+    // Send commands
+    while let Ok(command) = command_rx.recv() {
+        let data = serde_json::to_vec(&command)?; // ⬅ command must derive Serialize
+        channel
+            .basic_publish(
+                "",
+                ACTUATOR_COMMAND_QUEUE,
+                BasicPublishOptions::default(),
+                &data,
+                BasicProperties::default(),
+            )
+            .await?
+            .await?;
     }
+
+    Ok(())
 }
+
+// Process and transmit data in real time
+// loop {
+//     // Try to receive processed data
+//     match rx.recv() {
+//         Ok(data) => {
+//             let start = std::time::Instant::now();
+
+//             if let ConnectionType::CrossbeamChannel = transmitter.connection_type {
+//                 if let Some(tx) = &actuator_tx {
+//                     let command = ActuatorCommand::from_sensor_data(&data); // You need to implement this conversion
+//                     if tx.send(command).is_err() {
+//                         println!("Actuator channel closed, stopping transmitter.");
+//                         break;
+//                     }
+//                 }
+
+//                 // Record metrics
+//                 let mut metrics = PerformanceMetrics::new("data_transmission");
+//                 metrics.complete(true);
+//                 let _ = metrics_tx.send(metrics);
+//             } else {
+//                 // For other connection types, use the transmitter
+//                 let mut attempts = 0;
+//                 let max_attempts = 3;
+//                 let mut success = false;
+//                 let mut final_metrics = PerformanceMetrics::new("data_transmission");
+
+//                 while attempts < max_attempts {
+//                     match transmitter.send_data(&data).await {
+//                         Ok(metrics) => {
+//                             final_metrics = metrics;
+//                             final_metrics.complete(true);
+//                             success = true;
+//                             break;
+//                         }
+//                         Err(e) => {
+//                             // Convert error to String immediately for Send safety
+//                             let err_msg = e.to_string();
+//                             attempts += 1;
+//                             println!(
+//                                 "Attempt {}/{}: Failed to send data: {}",
+//                                 attempts, max_attempts, err_msg
+//                             );
+//                             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+//                         }
+//                     }
+//                 }
+
+//                 if !success {
+//                     final_metrics.complete(false);
+//                 }
+//                 let _ = metrics_tx.send(final_metrics);
+//             }
+
+//             // Check if transmission took too long
+//             let transmission_time = start.elapsed();
+//             if transmission_time.as_millis() > 1 {
+//                 println!(
+//                     "Warning: Transmission took too long: {:?}",
+//                     transmission_time
+//                 );
+//             }
+
+//             // Try to receive feedback
+//             if let ConnectionType::CrossbeamChannel = transmitter.connection_type {
+//                 // Feedback would come through a separate channel
+//                 // No implementation for now
+//             } else if let Some(tx) = &feedback_tx {
+//                 match transmitter.receive_feedback().await {
+//                     Ok(feedback) => {
+//                         if tx.send(feedback).is_err() {
+//                             println!("Feedback channel closed.");
+//                         }
+//                     }
+//                     Err(_) => {
+//                         // No feedback available or error
+//                     }
+//                 }
+//             }
+//         }
+//         Err(_) => {
+//             println!("Processor channel closed, stopping transmitter.");
+//             break;
+//         }
+//     }
+// }
+// }

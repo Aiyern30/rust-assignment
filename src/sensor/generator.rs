@@ -1,7 +1,7 @@
 use crate::common::data_types::{PerformanceMetrics, SensorData, SensorType};
 use rand::rngs::SmallRng; // This now works with the `small_rng` feature
-use rand::{Rng, SeedableRng}; // Added SeedableRng
-use rand_distr::{Distribution, Normal}; // Correct source of Normal
+use rand::{Rng, SeedableRng}; // Rng is needed for gen_range, SeedableRng for from_entropy
+use rand_distr::{Distribution, Normal}; // For noise generation
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time;
 
@@ -32,7 +32,8 @@ impl SensorGenerator {
             sample_rate_ms,
 
             drift_factor,
-            rng: SmallRng::from_entropy(), // Initialize with entropy
+            rng: SmallRng::from_entropy(),
+
             normal_dist,
             last_value: base_value,
         }
