@@ -3,7 +3,7 @@ use crate::common::data_types::{
 };
 use rolling_stats::Stats;
 use std::collections::HashMap;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 pub struct DataProcessor {
     moving_averages: HashMap<String, Stats<f64>>,
@@ -62,6 +62,7 @@ impl DataProcessor {
     pub fn generate_actuator_command(&self, sensor_data: &SensorData) -> Option<ActuatorCommand> {
         if sensor_data.is_anomaly {
             Some(ActuatorCommand {
+                command_id: format!("cmd_{}", sensor_data.sensor_id),
                 actuator_id: sensor_data.sensor_id.clone(),
                 control_command: ControlCommand {
                     command_type: "adjust_position".to_string(),
@@ -70,7 +71,12 @@ impl DataProcessor {
                     value: sensor_data.value,
                 },
                 priority: 1,
-                deadline: Instant::now() + Duration::from_millis(2),
+                // deadline: Instant::now() + Duration::from_millis(2),
+                deadline: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis()
+                    + 2000, // 2 seconds from now
             })
         } else {
             None

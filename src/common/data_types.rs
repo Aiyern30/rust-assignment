@@ -11,7 +11,7 @@ pub struct SensorData {
     pub is_anomaly: bool,         // Flag for anomalies
     pub confidence: f64,          // Confidence level (0.0-1.0)
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControlCommand {
     pub command_type: String,
     pub payload: Option<String>,
@@ -19,12 +19,22 @@ pub struct ControlCommand {
     pub value: f64,
 }
 
-#[derive(Debug, Clone)]
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct ActuatorCommand {
+//     pub command_id: String,
+//     pub actuator_id: String,
+//     pub value: f64,
+//     pub priority: u8,
+//     pub deadline: u128,
+// }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActuatorCommand {
+    pub command_id: String,
     pub actuator_id: String,
     pub control_command: ControlCommand,
     pub priority: u8,
-    pub deadline: Instant,
+    pub deadline: u128,
 }
 
 // Types of sensors we might simulate
@@ -51,6 +61,9 @@ pub enum ActuatorStatus {
     Adjusting,
     Warning,
     Error,
+    Success,
+    Failure,
+    InProgress,
 }
 
 // Metrics for performance benchmarking
@@ -112,6 +125,7 @@ impl ActuatorCommand {
     pub fn from_sensor_data(data: &SensorData) -> Self {
         // Determine actuator_id from sensor_id (example logic)
         let actuator_id = format!("actuator_for_{}", data.sensor_id);
+        let command_id = format!("cmd_{}", data.sensor_id);
 
         // Example: command_type depends on sensor reading type
         let command_type = match data.reading_type {
@@ -130,7 +144,12 @@ impl ActuatorCommand {
         let priority = if data.is_anomaly { 10 } else { 5 };
 
         // Deadline example: 1 second from now
-        let deadline = Instant::now() + std::time::Duration::from_secs(1);
+        // let deadline = Instant::now() + std::time::Duration::from_secs(1);
+        let deadline = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            + 1000;
 
         let control_command = ControlCommand {
             command_type,
@@ -140,6 +159,7 @@ impl ActuatorCommand {
         };
 
         ActuatorCommand {
+            command_id,
             actuator_id,
             control_command,
             priority,

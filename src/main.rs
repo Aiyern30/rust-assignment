@@ -3,7 +3,7 @@ mod common;
 mod config;
 mod sensor;
 
-use actuator::system::run_actuator_system;
+use crate::actuator::system::run_actuator_system;
 use clap::{Parser, Subcommand};
 use crossbeam_channel::{bounded, unbounded};
 use std::path::PathBuf;
@@ -103,6 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 bounded::<common::data_types::SensorData>(100);
             let (sensor_tx_processor, sensor_rx_processor) =
                 bounded::<common::data_types::SensorData>(100);
+            let (actuator_command_tx, actuator_command_rx) = crossbeam_channel::unbounded();
 
             // Other channels
             let (processed_tx, processed_rx) = bounded::<common::data_types::SensorData>(100);
@@ -149,7 +150,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Spawn actuator system task with actuator's sensor receiver
             tokio::spawn(async move {
-                run_actuator_system(sensor_rx_actuator, feedback_tx).await;
+                let _ =
+                    run_actuator_system(sensor_rx_actuator, feedback_tx, actuator_command_tx).await;
             });
 
             // Spawn metrics collector task
@@ -185,19 +187,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
 
             // Spawn transmitter task
-            let transmitter_config = config.transmitter.clone();
-            let transmitter_metrics_tx = metrics_tx.clone();
+            // let transmitter_config = config.transmitter.clone();
+            // let transmitter_metrics_tx = metrics_tx.clone();
             let feedback_tx_for_transmitter = feedback_tx_clone;
-            tokio::spawn(async move {
-                sensor::transmitter::run_transmitter(
-                    &transmitter_config,
-                    processed_rx,
-                    Some(actuator_tx_for_transmitter),
-                    transmitter_metrics_tx,
-                    Some(feedback_tx_for_transmitter),
-                )
-                .await;
-            });
+            tokio::spawn(sensor::transmitter::run_transmitter(
+                actuator_command_rx,
+                feedback_tx_for_transmitter,
+            ));
+            // tokio::spawn(async move {
+            //     sensor::transmitter::run_transmitter(
+            //         &transmitter_config,
+            //         processed_rx,
+            //         Some(actuator_tx_for_transmitter),
+            //         transmitter_metrics_tx,
+            //         Some(feedback_tx_for_transmitter),
+            //     )
+            //     .await;
+            // });
 
             // Keep running
             println!("System running. Press Ctrl+C to stop.");
