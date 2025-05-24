@@ -20,22 +20,6 @@ pub fn benchmark_processor(c: &mut Criterion) {
     });
 }
 
-pub fn benchmark_sensor(c: &mut Criterion) {
-    c.bench_function("dummy_sensor_benchmark", |b| {
-        b.iter(|| {
-            let _ = 2 + 2;
-        });
-    });
-}
-
-pub fn my_benchmark(c: &mut Criterion) {
-    c.bench_function("add_two_numbers", |b| {
-        b.iter(|| {
-            let _ = 1 + 2;
-        });
-    });
-}
-
 // Include all benchmarks in one group
-criterion_group!(benches, benchmark_processor, benchmark_sensor, my_benchmark);
+criterion_group!(benches, benchmark_processor);
 criterion_main!(benches);
