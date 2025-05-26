@@ -36,24 +36,6 @@ enum Commands {
         #[arg(short, long)]
         sample_rate: Option<u64>,
     },
-
-    /// Generate default configuration file
-    GenConfig {
-        /// Path to output configuration file
-        #[arg(short, long, value_name = "FILE")]
-        output: PathBuf,
-    },
-
-    /// Run benchmarks
-    Benchmark {
-        /// Number of iterations for benchmarking
-        #[arg(short, long, default_value = "1000")]
-        iterations: usize,
-
-        /// Path to output benchmark results
-        #[arg(short, long, value_name = "FILE")]
-        output: PathBuf,
-    },
 }
 
 #[tokio::main]
@@ -209,88 +191,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("System running. Press Ctrl+C to stop.");
             tokio::signal::ctrl_c().await?;
             println!("Shutting down...");
-        }
-
-        Commands::GenConfig { output } => {
-            let config = config::Config::default();
-            config.save_to_file(output.to_str().unwrap())?;
-            println!("Default configuration saved to {:?}", output);
-        }
-
-        Commands::Benchmark { iterations, output } => {
-            println!("Running benchmarks with {} iterations", iterations);
-
-            let _config = config::Config::default();
-            let (_sensor_tx, _sensor_rx) = bounded::<common::data_types::SensorData>(100);
-            let (_processed_tx, _processed_rx) = bounded::<common::data_types::SensorData>(100);
-            let (_metrics_tx, _metrics_rx) = unbounded::<common::data_types::PerformanceMetrics>();
-
-            // Setup benchmarking sensor generator
-            let mut generator = sensor::generator::SensorGenerator::new(
-                "bench_sensor",
-                common::data_types::SensorType::Force,
-                1,
-                10.0,
-                0.2,
-                0.01,
-            );
-
-            // Setup benchmarking processor
-            let mut processor = sensor::processor::DataProcessor::new(20);
-
-            // Benchmark sensor data generation
-            println!("Benchmarking sensor data generation...");
-            let start = std::time::Instant::now();
-            for _ in 0..iterations {
-                let (_data, _timestamp) = generator.generate_reading();
-            }
-            let generation_time = start.elapsed();
-
-            // Generate test data for processing
-            let mut test_data = Vec::with_capacity(iterations as usize);
-            for _ in 0..iterations {
-                let (data, _timestamp) = generator.generate_reading();
-                test_data.push(data);
-            }
-
-            // Benchmark data processing
-            println!("Benchmarking data processing...");
-            let start = std::time::Instant::now();
-            for data in &test_data {
-                let (_processed_data, _metrics) = processor.process(data.clone());
-            }
-            let processing_time = start.elapsed();
-
-            // Show results
-            println!("Benchmark Results:");
-            println!(
-                "  Sensor data generation: {:?} for {} iterations ({:?} per iteration)",
-                generation_time,
-                iterations,
-                generation_time / iterations as u32
-            );
-            println!(
-                "  Data processing: {:?} for {} iterations ({:?} per iteration)",
-                processing_time,
-                iterations,
-                processing_time / iterations as u32
-            );
-
-            // Save results to file
-            let results = format!(
-                "Benchmark Results:\n\
-         Iterations: {}\n\
-         Sensor data generation: {:?} ({:?} per iteration)\n\
-         Data processing: {:?} ({:?} per iteration)\n",
-                iterations,
-                generation_time,
-                generation_time / iterations as u32,
-                processing_time,
-                processing_time / iterations as u32
-            );
-
-            std::fs::write(&output, results)?;
-            println!("Benchmark results saved to {:?}", output);
         }
     }
 
