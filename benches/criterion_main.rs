@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use rust_assignment::common::data_types::{SensorData, SensorType};
+use rust_assignment::common::data_types::{ActuatorCommand, ActuatorFeedback, ControlCommand, SensorData, SensorType};
 use rust_assignment::sensor::processor::DataProcessor;
 use std::hint::black_box;
 
@@ -48,6 +48,47 @@ pub fn benchmark_serialization(c: &mut Criterion) {
         });
     });
 }
+
+/// Benchmark ActuatorFeedback deserialization
+pub fn benchmark_actuator_feedback_deserialization(c: &mut Criterion) {
+    let json = br#"{
+        "actuator_id": "A1",
+        "status": "Success",
+        "message": "Command executed successfully",
+        "timestamp": 1234567890
+    }"#;
+
+    c.bench_function("actuator_feedback_deserialization", |b| {
+        b.iter(|| {
+            let feedback: ActuatorFeedback = black_box(serde_json::from_slice(json).unwrap());
+            black_box(feedback);
+        });
+    });
+}
+
+/// Simulate just the encoding step in transmitter
+pub fn benchmark_transmitter_encode_step(c: &mut Criterion) {
+    let command = ActuatorCommand {
+        command_id: "CMD999".to_string(),
+        actuator_id: "A2".to_string(),
+        control_command: ControlCommand {
+            command_type: "SetPosition".to_string(),
+            payload: Some("Target=42".to_string()),
+            timestamp: 1234567890,
+            value: 42.0,
+        },
+        priority: 2,
+        deadline: 9876543210,
+    };
+
+    c.bench_function("transmitter_encode_sim", |b| {
+        b.iter(|| {
+            let json = black_box(serde_json::to_vec(&command).unwrap());
+            black_box(json);
+        });
+    });
+}
+
 
 criterion_group!(benches, benchmark_processor, benchmark_serialization);
 criterion_main!(benches);
