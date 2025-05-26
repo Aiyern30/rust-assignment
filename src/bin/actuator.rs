@@ -111,7 +111,6 @@
 use rust_assignment::actuator::controller::PIDController;
 use rust_assignment::actuator::executor::Executor;
 use rust_assignment::actuator::receiver::ReceiverTask;
-use rust_assignment::actuator::scheduler::Scheduler;
 use rust_assignment::actuator::system::{initialize_actuator_control_system, run_actuator_system};
 use rust_assignment::common::data_types::{
     ActuatorCommand, ActuatorFeedback, ActuatorStatus, SensorData,
