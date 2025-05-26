@@ -1,3 +1,6 @@
+use crate::common::data_types::ActuatorCommand;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -12,16 +15,28 @@ impl Scheduler {
         }
     }
 
-    pub fn start<F>(&self, mut task: F)
-    where
-        F: FnMut() + Send + 'static,
+    pub fn start<F>(
+        &self,
+        command_map: Arc<Mutex<HashMap<String, Vec<ActuatorCommand>>>>,
+        mut task_fn: F,
+    ) where
+        F: FnMut(String, ActuatorCommand) + Send + 'static,
     {
         let interval = self.interval;
         thread::spawn(move || {
             let mut next_instant = Instant::now();
             loop {
                 next_instant += interval;
-                task();
+                // task();
+                {
+                    let mut map = command_map.lock().unwrap();
+                    for (actuator_id, queue) in map.iter_mut() {
+                        if let Some(command) = queue.pop() {
+                            // Run the task for this actuator's command
+                            task_fn(actuator_id.clone(), command);
+                        }
+                    }
+                }
 
                 let now = Instant::now();
                 if next_instant > now {
