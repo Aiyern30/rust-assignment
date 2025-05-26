@@ -120,3 +120,19 @@ impl SensorData {
         }
     }
 }
+impl ActuatorCommand {
+    pub fn from_sensor_data(data: &SensorData) -> Self {
+        ActuatorCommand {
+            command_id: format!("CMD-{}", data.timestamp),
+            actuator_id: format!("A-{}", data.sensor_id),
+            control_command: ControlCommand {
+                command_type: "AUTO".to_string(),
+                payload: None,
+                timestamp: data.timestamp,
+                value: data.value,
+            },
+            priority: if data.is_anomaly { 1 } else { 5 },
+            deadline: data.timestamp + 5000,
+        }
+    }
+}
