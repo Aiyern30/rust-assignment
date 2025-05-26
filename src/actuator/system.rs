@@ -3,7 +3,7 @@ use crate::common::constants::*;
 use crate::common::data_types::{ActuatorCommand, ActuatorFeedback, ActuatorStatus, SensorData};
 use crossbeam_channel::{Receiver, Sender};
 use futures::StreamExt;
-use lapin::{options::*, types::FieldTable, BasicProperties, Connection, ConnectionProperties};
+use lapin::{options::*, types::FieldTable, Connection, ConnectionProperties};
 use serde_json;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
