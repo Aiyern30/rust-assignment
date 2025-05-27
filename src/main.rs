@@ -18,23 +18,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Run the sensor system
     Run {
-        /// Path to configuration file
         #[arg(short, long, value_name = "FILE")]
         config: Option<PathBuf>,
-
-        /// Connection mode (tcp, shared_memory, channel)
-        #[arg(short, long, default_value = "channel")]
-        mode: String,
-
-        /// Endpoint for connection (IP:PORT for TCP)
-        #[arg(short, long)]
-        endpoint: Option<String>,
-
-        /// Sample rate in milliseconds
-        #[arg(short, long)]
-        sample_rate: Option<u64>,
     },
 }
 
@@ -43,39 +29,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Run {
-            config,
-            mode,
-            endpoint,
-            sample_rate,
-        } => {
+        Commands::Run { config, .. } => {
             // Load configuration
             let mut config = match config {
                 Some(path) => config::Config::from_file(path.to_str().unwrap())?,
                 None => config::Config::default(),
             };
-
-            // Override config with CLI args
-            config.transmitter.connection_type = mode;
-            if let Some(ep) = endpoint {
-                config.transmitter.endpoint = ep;
-            }
-            if let Some(rate) = sample_rate {
-                config.sensor.sample_rate_ms = rate;
-            }
-
-            // Display current config
-            println!("Starting sensor system with configuration:");
-            println!("  Sample rate: {}ms", config.sensor.sample_rate_ms);
-            println!("  Connection type: {}", config.transmitter.connection_type);
-            if config.transmitter.connection_type == "tcp" {
-                println!("  Endpoint: {}", config.transmitter.endpoint);
-            } else if config.transmitter.connection_type == "shared_memory" {
-                println!(
-                    "  Shared memory name: {}",
-                    config.transmitter.shared_mem_name
-                );
-            }
 
             // Create main sensor channel
             let (sensor_tx, sensor_rx_main) = bounded::<common::data_types::SensorData>(100);
@@ -167,25 +126,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await;
             });
-
-            // Spawn transmitter task
-            // let transmitter_config = config.transmitter.clone();
-            // let transmitter_metrics_tx = metrics_tx.clone();
-            let feedback_tx_for_transmitter = feedback_tx_clone;
-            tokio::spawn(sensor::transmitter::run_transmitter(
-                actuator_command_rx,
-                feedback_tx_for_transmitter,
-            ));
-            // tokio::spawn(async move {
-            //     sensor::transmitter::run_transmitter(
-            //         &transmitter_config,
-            //         processed_rx,
-            //         Some(actuator_tx_for_transmitter),
-            //         transmitter_metrics_tx,
-            //         Some(feedback_tx_for_transmitter),
-            //     )
-            //     .await;
-            // });
 
             // Keep running
             println!("System running. Press Ctrl+C to stop.");

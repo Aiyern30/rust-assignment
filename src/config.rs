@@ -6,7 +6,7 @@ use std::io::Read;
 pub struct Config {
     pub sensor: SensorConfig,
     pub processor: ProcessorConfig,
-    pub transmitter: TransmitterConfig,
+
     pub metrics: MetricsConfig,
 }
 
@@ -22,15 +22,6 @@ pub struct SensorConfig {
 pub struct ProcessorConfig {
     pub window_size: usize,     // Size of moving average window
     pub anomaly_threshold: f64, // Base threshold for anomaly detection
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TransmitterConfig {
-    pub connection_type: String, // "tcp", "shared_memory", or "channel"
-    pub endpoint: String,        // For TCP: address:port
-    pub shared_mem_name: String, // For shared memory: name
-    pub buffer_size: usize,      // Buffer size for communication
-    pub retry_attempts: usize,   // How many times to retry failed transmissions
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,13 +54,7 @@ impl Config {
                 window_size: 20,        // 20 samples window
                 anomaly_threshold: 3.0, // 3 standard deviations
             },
-            transmitter: TransmitterConfig {
-                connection_type: "channel".to_string(), // Default to in-process channel
-                endpoint: "127.0.0.1:8080".to_string(), // Default TCP endpoint
-                shared_mem_name: "sensor_data".to_string(), // Default shared memory name
-                buffer_size: 1024,                      // 1KB buffer
-                retry_attempts: 3,                      // 3 retry attempts
-            },
+
             metrics: MetricsConfig {
                 log_to_file: true,                   // Log metrics to file
                 log_file: "metrics.log".to_string(), // Default log file
