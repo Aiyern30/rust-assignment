@@ -44,7 +44,15 @@ async fn main() -> anyhow::Result<()> {
 
     // Listen for feedback
     while let Ok(feedback) = feedback_rx.recv() {
-        println!("SENSOR received feedback: {:?}", feedback);
+        println!(
+            "[Feedback: {:<25}] | Status: {:<8} | Message: {}",
+            feedback.actuator_id,
+            format!("{:?}", feedback.status),
+            feedback
+                .message
+                .clone()
+                .unwrap_or_else(|| "None".to_string())
+        );
     }
 
     Ok(())
