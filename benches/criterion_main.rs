@@ -76,6 +76,7 @@ pub fn benchmark_transmitter_encode_step(c: &mut Criterion) {
             payload: Some("Target=42".to_string()),
             timestamp: 1234567890,
             value: 42.0,
+            deadline: todo!(),
         },
         priority: 2,
         deadline: 9876543210,
