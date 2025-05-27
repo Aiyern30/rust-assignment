@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
         Commands::Run { config, .. } => {
             // Load configuration
-            let mut config = match config {
+            let config = match config {
                 Some(path) => config::Config::from_file(path.to_str().unwrap())?,
                 None => config::Config::default(),
             };
