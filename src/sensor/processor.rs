@@ -69,6 +69,11 @@ impl DataProcessor {
                     payload: Some("new_target_position".to_string()),
                     timestamp: current_timestamp_ms() as u128,
                     value: sensor_data.value,
+                    deadline: SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis()
+                        + 2,
                 },
                 priority: 1,
                 // deadline: Instant::now() + Duration::from_millis(2),

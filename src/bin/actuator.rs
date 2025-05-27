@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
     initialize_actuator_control_system(shared_sensor_data, feedback_tx.clone(), command_rx);
 
     tokio::spawn(async move {
-        if let Err(err) = run_actuator_system(sensor_data_rx, feedback_tx, command_tx).await {
+        if let Err(err) = run_actuator_system(sensor_data_rx, feedback_tx).await {
             eprintln!("❌ Error in run_actuator_system: {}", err);
         }
     });

@@ -9,100 +9,38 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub async fn run_actuator_system(
-    _sensor_data_rx: Receiver<crate::common::data_types::SensorData>,
-    _feedback_tx: Sender<ActuatorFeedback>,
-    command_tx: Sender<ActuatorCommand>,
-) -> anyhow::Result<()> {
-    let conn =
-        Connection::connect("amqp://127.0.0.1:5672/%2f", ConnectionProperties::default()).await?;
-    let channel = conn.create_channel().await?;
+use super::receiver::ReceiverTask;
 
-    channel
-        .queue_declare(
-            ACTUATOR_COMMAND_QUEUE,
-            QueueDeclareOptions::default(),
-            FieldTable::default(),
-        )
-        .await?;
+pub async fn run_actuator_system(rx: Receiver<SensorData>, feedback_tx: Sender<ActuatorFeedback>) {
+    let metrics_config = MetricsConfig {
+        report_interval_ms: 60_000,
+        log_to_file: false,
+        log_file: String::new(),
+    };
 
-    channel
-        .queue_declare(
-            ACTUATOR_FEEDBACK_QUEUE,
-            QueueDeclareOptions::default(),
-            FieldTable::default(),
-        )
-        .await?;
+    let metrics: Arc<MetricsCollector> = Arc::new(MetricsCollector::new(&metrics_config));
 
-    // Consume actuator commands
-    let mut consumer = channel
-        .basic_consume(
-            ACTUATOR_COMMAND_QUEUE,
-            "actuator_consumer",
-            BasicConsumeOptions::default(),
-            FieldTable::default(),
-        )
-        .await?;
+    let controller: Arc<Mutex<PIDController>> =
+        Arc::new(Mutex::new(PIDController::new(1.0, 0.1, 0.05)));
+    let executor: Arc<Executor> = Arc::new(Executor::new());
 
-    println!("📡 Waiting for ACTUATOR_COMMANDS...");
+    let latest_sensor_data: Arc<Mutex<Option<SensorData>>> = Arc::new(Mutex::new(None));
 
-    while let Some(delivery) = consumer.next().await {
-        if let Ok(delivery) = delivery {
-            let command: ActuatorCommand = serde_json::from_slice(&delivery.data)?;
+    let sensor_data_clone = Arc::clone(&latest_sensor_data);
+    let metrics_clone = Arc::clone(&metrics);
 
-            // Process command (e.g., run controller logic)
-            command_tx.send(command.clone()).ok();
+    let mut receiver_task = ReceiverTask::new(rx, metrics_clone, sensor_data_clone);
 
-            // let fb_data = serde_json::to_vec(&feedback)?;
-            // channel
-            //     .basic_publish(
-            //         "",
-            //         ACTUATOR_FEEDBACK_QUEUE,
-            //         BasicPublishOptions::default(),
-            //         &fb_data,
-            //         BasicProperties::default(),
-            //     )
-            //     .await?
-            //     .await?;
+    std::thread::spawn(move || {
+        receiver_task.run();
+    });
 
-            delivery.ack(BasicAckOptions::default()).await?;
-        }
-    }
-
-    Ok(())
-}
-
-pub fn initialize_actuator_control_system(
-    shared_sensor_data: Arc<Mutex<Option<SensorData>>>,
-    feedback_tx: Sender<ActuatorFeedback>,
-    command_rx: Receiver<ActuatorCommand>,
-) {
-    let controller = Arc::new(Mutex::new(PIDController::new(1.0, 0.1, 0.05)));
-    let executor = Arc::new(Executor::new());
-    // let shared = Arc::clone(&shared_sensor_data);
-
-    let tx = feedback_tx.clone();
-    let command_map: Arc<Mutex<HashMap<String, Vec<ActuatorCommand>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-
-    {
-        let command_map = Arc::clone(&command_map);
-        std::thread::spawn(move || {
-            while let Ok(command) = command_rx.recv() {
-                command_map
-                    .lock()
-                    .unwrap()
-                    .entry(command.actuator_id.clone())
-                    .or_default()
-                    .push(command);
-            }
-        });
-    }
-    let scheduler = Scheduler::new(5); // 5ms
-    let ctrl = Arc::clone(&controller);
-    let exec = Arc::clone(&executor);
-    let shared_map = Arc::clone(&command_map);
-    let shared_sensor = Arc::clone(&shared_sensor_data);
+    // === Scheduler to process control loop ===
+    let scheduler = Scheduler::new(5);
+    let controller_clone = Arc::clone(&controller);
+    let executor_clone = Arc::clone(&executor);
+    let feedback_tx_clone = feedback_tx.clone();
+    let data_for_scheduler = Arc::clone(&latest_sensor_data);
 
     scheduler.start(shared_map, move |actuator_id, command| {
         let maybe_data = shared_sensor.lock().unwrap().clone();
@@ -111,6 +49,13 @@ pub fn initialize_actuator_control_system(
             let command = pid.compute(50.0, sensor_data.value, 0.005);
 
             exec.execute(command.clone());
+
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis();
+
+            let missed_deadline = now > command.deadline;
 
             let feedback = ActuatorFeedback {
                 timestamp: SystemTime::now()

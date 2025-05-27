@@ -17,6 +17,7 @@ pub struct ControlCommand {
     pub payload: Option<String>,
     pub timestamp: u128,
     pub value: f64,
+    pub deadline: u128,
 }
 
 // #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,7 +59,6 @@ pub struct ActuatorFeedback {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum ActuatorStatus {
     Normal,
-    Adjusting,
     Warning,
     Error,
     Success,
@@ -122,17 +122,48 @@ impl SensorData {
 }
 impl ActuatorCommand {
     pub fn from_sensor_data(data: &SensorData) -> Self {
+        // Determine actuator_id from sensor_id (example logic)
+        let actuator_id = format!("actuator_for_{}", data.sensor_id);
+        let command_id = format!("cmd_{}", data.sensor_id);
+
+        // Example: command_type depends on sensor reading type
+        let command_type = match data.reading_type {
+            SensorType::Force => "AdjustForce",
+            SensorType::Position => "MovePosition",
+            SensorType::Velocity => "SetVelocity",
+            SensorType::Temperature => "RegulateTemperature",
+        }
+        .to_string();
+
+        // Payload could be some JSON or string representing the command parameters,
+        // here we just serialize the value as string for simplicity
+        let payload = Some(format!("{{\"value\": {:.2}}}", data.value));
+
+        // Set priority higher if anomaly detected, else default 5
+        let priority = if data.is_anomaly { 10 } else { 5 };
+
+        // Deadline example: 1 second from now
+        // let deadline = Instant::now() + std::time::Duration::from_secs(1);
+        let deadline = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            + 1000;
+
+        let control_command = ControlCommand {
+            command_type,
+            payload,
+            timestamp: data.timestamp,
+            value: data.value,
+            deadline: deadline as u128,
+        };
+
         ActuatorCommand {
-            command_id: format!("CMD-{}", data.timestamp),
-            actuator_id: format!("A-{}", data.sensor_id),
-            control_command: ControlCommand {
-                command_type: "AUTO".to_string(),
-                payload: None,
-                timestamp: data.timestamp,
-                value: data.value,
-            },
-            priority: if data.is_anomaly { 1 } else { 5 },
-            deadline: data.timestamp + 5000,
+            command_id,
+            actuator_id,
+            control_command,
+            priority,
+            deadline,
         }
     }
 }

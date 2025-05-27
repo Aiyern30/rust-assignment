@@ -42,6 +42,7 @@ impl PIDController {
             payload: None, // Optional additional info, can be Some(String)
             timestamp,
             value: output,
+            deadline: timestamp + 2,
         }
     }
 }
