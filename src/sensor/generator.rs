@@ -106,18 +106,17 @@ impl SensorGenerator {
                 metrics.duration_ms = Some(dur.as_secs_f64() * 1000.0); // in milliseconds
             }
 
-            // Print sensor reading and performance metrics fields
             println!(
-                "Generated sensor reading: id={}, type={:?}, value={:.3}, anomaly={}, interval_ms={:?}, perf_metrics: operation={}, duration_ms={:?}, success={}",
-                data.sensor_id,
-                data.reading_type,
-                data.value,
-                data.is_anomaly,
-                duration_since_last.map(|d| d.as_millis()),
-                metrics.operation,
-                metrics.duration_ms,
-                metrics.success,
-            );
+    "[Sensor: {:<17}] | Type: {:<11} | Value: {:>7.3} | Anomaly: {:<5} | Interval: {:>4} ms | Perf: {:<25} | Duration: {:>7.2} ms | Success: {}",
+    data.sensor_id,
+    format!("{:?}", data.reading_type),
+    data.value,
+    data.is_anomaly,
+    duration_since_last.map(|d| d.as_millis()).unwrap_or_default(),
+    metrics.operation,
+    metrics.duration_ms.unwrap_or_default(),
+    metrics.success
+);
 
             let _ = metrics_tx.send(metrics);
 
