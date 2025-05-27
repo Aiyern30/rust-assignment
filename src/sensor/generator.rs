@@ -96,7 +96,10 @@ impl SensorGenerator {
 
             // Generate reading and send it
             let (data, metrics) = self.generate_reading();
-
+            println!(
+                "Generated sensor reading: id={}, type={:?}, value={:.3}, anomaly={}",
+                data.sensor_id, data.reading_type, data.value, data.is_anomaly
+            );
             // Send the metrics
             let _ = metrics_tx.send(metrics);
 

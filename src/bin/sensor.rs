@@ -1,27 +1,3 @@
-// #[tokio::main]
-// async fn main() -> anyhow::Result<()> {
-//     use crossbeam_channel::{unbounded, Receiver, Sender};
-//     use rust_assignment::common::data_types::{ActuatorCommand, ActuatorFeedback};
-//     use rust_assignment::sensor::transmitter::run_transmitter;
-
-//     let (_command_tx, command_rx): (Sender<ActuatorCommand>, Receiver<ActuatorCommand>) =
-//         unbounded();
-//     let (feedback_tx, feedback_rx): (Sender<ActuatorFeedback>, Receiver<ActuatorFeedback>) =
-//         unbounded();
-
-//     println!("Starting SENSOR system with RabbitMQ...");
-
-//     // You might generate and send commands here or spawn processor/generator logic
-//     tokio::spawn(run_transmitter(command_rx, feedback_tx));
-
-//     // Just print incoming feedback for now
-//     while let Ok(feedback) = feedback_rx.recv() {
-//         println!("Sensor received feedback: {:?}", feedback);
-//     }
-
-//     Ok(())
-// }
-
 use crossbeam_channel::unbounded;
 use rust_assignment::common::data_types::{
     ActuatorCommand, ActuatorFeedback, PerformanceMetrics, SensorData,
