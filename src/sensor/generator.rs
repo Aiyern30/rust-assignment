@@ -3,7 +3,7 @@ use rand::rngs::SmallRng; // This now works with the `small_rng` feature
 use rand::{Rng, SeedableRng}; // Rng is needed for gen_range, SeedableRng for from_entropy
 use rand_distr::{Distribution, Normal}; // For noise generation
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::time;
+use tokio::time::{self, Instant};
 
 pub struct SensorGenerator {
     sensor_id: String,
@@ -13,6 +13,7 @@ pub struct SensorGenerator {
     rng: SmallRng,
     normal_dist: Normal<f64>,
     last_value: f64,
+    last_emit_time: Option<Instant>,
 }
 
 impl SensorGenerator {
@@ -36,6 +37,7 @@ impl SensorGenerator {
 
             normal_dist,
             last_value: base_value,
+            last_emit_time: None,
         }
     }
 
@@ -82,7 +84,6 @@ impl SensorGenerator {
         (sensor_data, metrics)
     }
 
-    // Run the sensor in real-time
     pub async fn run(
         &mut self,
         tx: crossbeam_channel::Sender<SensorData>,
@@ -91,19 +92,35 @@ impl SensorGenerator {
         let mut interval = time::interval(Duration::from_millis(self.sample_rate_ms));
 
         loop {
-            // Wait until the next tick
             interval.tick().await;
 
-            // Generate reading and send it
-            let (data, metrics) = self.generate_reading();
+            // Measure time since last emit
+            let now = Instant::now();
+            let duration_since_last = self.last_emit_time.map(|last| now.duration_since(last));
+            self.last_emit_time = Some(now);
+
+            let (data, mut metrics) = self.generate_reading();
+
+            // If we have a previous timestamp, add jitter duration metric
+            if let Some(dur) = duration_since_last {
+                metrics.duration_ms = Some(dur.as_secs_f64() * 1000.0); // in milliseconds
+            }
+
+            // Print sensor reading and performance metrics fields
             println!(
-                "Generated sensor reading: id={}, type={:?}, value={:.3}, anomaly={}",
-                data.sensor_id, data.reading_type, data.value, data.is_anomaly
+                "Generated sensor reading: id={}, type={:?}, value={:.3}, anomaly={}, interval_ms={:?}, perf_metrics: operation={}, duration_ms={:?}, success={}",
+                data.sensor_id,
+                data.reading_type,
+                data.value,
+                data.is_anomaly,
+                duration_since_last.map(|d| d.as_millis()),
+                metrics.operation,
+                metrics.duration_ms,
+                metrics.success,
             );
-            // Send the metrics
+
             let _ = metrics_tx.send(metrics);
 
-            // Send the sensor data
             if tx.send(data).is_err() {
                 println!("Receiver has been dropped, stopping sensor generation.");
                 break;
