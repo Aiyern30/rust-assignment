@@ -77,11 +77,4 @@ impl Config {
             },
         }
     }
-
-    // Save configuration to file
-    pub fn save_to_file(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let serialized = serde_json::to_string_pretty(self)?;
-        std::fs::write(path, serialized)?;
-        Ok(())
-    }
 }
