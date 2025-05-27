@@ -1,117 +1,7 @@
-// // #[tokio::main]
-// // async fn main() -> anyhow::Result<()> {
-// //     use crossbeam_channel::{unbounded, Receiver, Sender};
-// //     use rust_assignment::actuator::system::run_actuator_system;
-// //     use rust_assignment::common::data_types::{ActuatorCommand, ActuatorFeedback, SensorData};
-
-// //     let (sensor_data_tx, sensor_data_rx): (Sender<SensorData>, Receiver<SensorData>) = unbounded();
-// //     let (feedback_tx, _feedback_rx): (Sender<ActuatorFeedback>, Receiver<ActuatorFeedback>) =
-// //         unbounded();
-// //     let (command_tx, _command_rx): (Sender<ActuatorCommand>, Receiver<ActuatorCommand>) =
-// //         unbounded();
-
-// //     println!("Starting ACTUATOR system with RabbitMQ...");
-// //     run_actuator_system(sensor_data_rx, feedback_tx, command_tx).await
-// // }
-
-// use futures::StreamExt;
-// use lapin::{
-//     options::*, types::FieldTable, BasicProperties, Channel, Connection, ConnectionProperties,
-// };
-// use rust_assignment::common::data_types::{ActuatorCommand, ActuatorFeedback, ActuatorStatus};
-// use serde_json;
-// use tokio;
-
-// #[tokio::main]
-// async fn main() -> anyhow::Result<()> {
-//     println!("ACTUATOR started. Connecting to RabbitMQ...");
-
-//     // 1. Connect to RabbitMQ
-//     let conn =
-//         Connection::connect("amqp://127.0.0.1:5672/%2f", ConnectionProperties::default()).await?;
-//     let channel = conn.create_channel().await?;
-
-//     // 2. Declare queues (ensure they exist)
-//     channel
-//         .queue_declare(
-//             "actuator_command_queue",
-//             QueueDeclareOptions::default(),
-//             FieldTable::default(),
-//         )
-//         .await?;
-
-//     channel
-//         .queue_declare(
-//             "actuator_feedback_queue",
-//             QueueDeclareOptions::default(),
-//             FieldTable::default(),
-//         )
-//         .await?;
-
-//     // 3. Start consuming command messages
-//     println!("Waiting for actuator commands...");
-//     let mut consumer = channel
-//         .basic_consume(
-//             "actuator_command_queue",
-//             "actuator_consumer",
-//             BasicConsumeOptions::default(),
-//             FieldTable::default(),
-//         )
-//         .await?;
-
-//     // 4. Process each command
-//     while let Some(delivery) = consumer.next().await {
-//         if let Ok(delivery) = delivery {
-//             let data = &delivery.data;
-
-//             // Parse the command
-//             let command: ActuatorCommand = match serde_json::from_slice(data) {
-//                 Ok(cmd) => cmd,
-//                 Err(err) => {
-//                     eprintln!("Failed to parse ActuatorCommand: {}", err);
-//                     continue;
-//                 }
-//             };
-
-//             println!("ACTUATOR received command:");
-//             println!("  actuator_id: {}", command.actuator_id);
-//             println!("  value: {}", command.control_command.value);
-//             println!("  priority: {}", command.priority);
-//             println!("  deadline: {}", command.deadline);
-
-//             // Construct feedback
-//             let feedback = ActuatorFeedback {
-//                 timestamp: chrono::Utc::now().timestamp_millis() as u128,
-//                 actuator_id: command.actuator_id.clone(),
-//                 status: ActuatorStatus::Normal,
-//                 message: None,
-//             };
-
-//             let feedback_bytes = serde_json::to_vec(&feedback)?;
-
-//             // Send feedback
-//             channel
-//                 .basic_publish(
-//                     "",
-//                     "actuator_feedback_queue",
-//                     BasicPublishOptions::default(),
-//                     &feedback_bytes,
-//                     BasicProperties::default(),
-//                 )
-//                 .await?
-//                 .await?; // Wait for confirmation
-
-//             delivery.ack(BasicAckOptions::default()).await?;
-//         }
-//     }
-
-//     Ok(())
-// }
-
 use rust_assignment::actuator::controller::PIDController;
 use rust_assignment::actuator::executor::Executor;
 use rust_assignment::actuator::receiver::ReceiverTask;
-use rust_assignment::actuator::scheduler::Scheduler;
+// use rust_assignment::actuator::scheduler::Scheduler;
 use rust_assignment::actuator::system::{initialize_actuator_control_system, run_actuator_system};
 use rust_assignment::common::data_types::{
     ActuatorCommand, ActuatorFeedback, ActuatorStatus, SensorData,
@@ -119,12 +9,13 @@ use rust_assignment::common::data_types::{
 use rust_assignment::common::metrics::MetricsCollector;
 use rust_assignment::config::MetricsConfig;
 
-use chrono::Utc;
+// use chrono::Utc;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use futures::StreamExt;
 use lapin::{options::*, types::FieldTable, BasicProperties, Connection, ConnectionProperties};
 use serde_json;
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -224,15 +115,39 @@ async fn main() -> anyhow::Result<()> {
             // Execute the control
             executor.execute(control);
 
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis();
+
+            let missed_deadline = now > command.deadline;
+
             // Send feedback
             let feedback = ActuatorFeedback {
-                timestamp: Utc::now().timestamp_millis() as u128,
+                timestamp: now,
+                // timestamp: Utc::now().timestamp_millis() as u128,
                 actuator_id: command.actuator_id.clone(),
-                status: ActuatorStatus::Success,
-                message: Some(format!(
-                    "Executed command_type: {}",
-                    command.control_command.command_type
-                )),
+                // status: ActuatorStatus::Success,
+                status: if missed_deadline {
+                    ActuatorStatus::Warning
+                } else {
+                    ActuatorStatus::Success
+                },
+                // message: Some(format!(
+                //     "Executed command_type: {}",
+                //     command.control_command.command_type
+                // )),
+                message: if missed_deadline {
+                    Some(format!(
+                        "❌ Deadline missed: now = {}, deadline = {}",
+                        now, command.deadline
+                    ))
+                } else {
+                    Some(format!(
+                        "✅ Command executed on time. Remaining = {}ms",
+                        command.deadline.saturating_sub(now)
+                    ))
+                },
             };
 
             let feedback_bytes = serde_json::to_vec(&feedback)?;

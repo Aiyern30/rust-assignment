@@ -17,6 +17,7 @@ pub struct ControlCommand {
     pub payload: Option<String>,
     pub timestamp: u128,
     pub value: f64,
+    pub deadline: u128,
 }
 
 // #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,12 +59,9 @@ pub struct ActuatorFeedback {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum ActuatorStatus {
     Normal,
-    Adjusting,
     Warning,
     Error,
     Success,
-    Failure,
-    InProgress,
 }
 
 // Metrics for performance benchmarking
@@ -156,6 +154,7 @@ impl ActuatorCommand {
             payload,
             timestamp: data.timestamp,
             value: data.value,
+            deadline: deadline as u128,
         };
 
         ActuatorCommand {

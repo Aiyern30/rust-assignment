@@ -112,17 +112,41 @@ pub fn initialize_actuator_control_system(
 
             exec.execute(command.clone());
 
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis();
+
+            let missed_deadline = now > command.deadline;
+
             let feedback = ActuatorFeedback {
-                timestamp: SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis(),
+                timestamp: now,
+                // SystemTime::now()
+                //     .duration_since(UNIX_EPOCH)
+                //     .unwrap()
+                //     .as_millis(),
                 actuator_id: format!("actuator_for_{}", actuator_id.clone()),
-                status: ActuatorStatus::Normal,
-                message: Some(format!(
-                    "Executed {} with {:.2}",
-                    command.command_type, command.value
-                )),
+                // status: ActuatorStatus::Normal,
+                status: if missed_deadline {
+                    ActuatorStatus::Warning
+                } else {
+                    ActuatorStatus::Success
+                },
+                // message: Some(format!(
+                //     "Executed {} with {:.2}",
+                //     command.command_type, command.value
+                // )),
+                message: if missed_deadline {
+                    Some(format!(
+                        "❌ Deadline missed: now = {}, deadline = {}",
+                        now, command.deadline
+                    ))
+                } else {
+                    Some(format!(
+                        "✅ Command executed on time. Remaining = {}ms",
+                        command.deadline.saturating_sub(now)
+                    ))
+                },
             };
 
             let _ = tx.send(feedback);
