@@ -1,7 +1,26 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use rust_assignment::common::data_types::{ActuatorCommand, ActuatorFeedback, ControlCommand, SensorData, SensorType};
+use rust_assignment::sensor::generator::SensorGenerator;
 use rust_assignment::sensor::processor::DataProcessor;
 use std::hint::black_box;
+
+pub fn benchmark_generate_reading(c: &mut Criterion) {
+    let mut generator = SensorGenerator::new(
+        "test_sensor",
+        SensorType::Force,
+        100,     
+        10.0,    
+        0.2,     
+        0.01,     
+    );
+
+    c.bench_function("sensor_generate_reading", |b| {
+        b.iter(|| {
+            let (reading, _metrics) = generator.generate_reading();
+            black_box(reading);
+        });
+    });
+}
 
 pub fn benchmark_processor(c: &mut Criterion) {
     let mut processor = DataProcessor::new(10);
@@ -91,5 +110,5 @@ pub fn benchmark_transmitter_encode_step(c: &mut Criterion) {
 }
 
 
-criterion_group!(benches, benchmark_processor, benchmark_serialization);
+criterion_group!(benches, benchmark_generate_reading,benchmark_processor, benchmark_serialization);
 criterion_main!(benches);
