@@ -51,6 +51,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let (metrics_tx, metrics_rx) = unbounded::<common::data_types::PerformanceMetrics>();
             let (actuator_tx, actuator_rx) = bounded::<common::data_types::ActuatorCommand>(100);
             let (feedback_tx, feedback_rx) = unbounded::<common::data_types::ActuatorFeedback>();
+            let (feedback_to_processor_tx, feedback_to_processor_rx) =
+                unbounded::<common::data_types::ActuatorFeedback>();
+
             tokio::spawn(async move {
                 while let Ok(cmd) = actuator_rx.recv() {
                     println!(
@@ -84,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tokio::spawn(async move {
                 while let Ok(feedback) = feedback_rx.recv() {
                     println!("Received actuator feedback: {:?}", feedback);
-                    // Handle the feedback (e.g., log it, update UI, etc.)
+                    let _ = feedback_to_processor_tx.send(feedback.clone());
                 }
             });
 
@@ -122,10 +125,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     processed_tx,
                     processor_metrics_tx,
                     actuator_tx_for_processor,
+                    feedback_to_processor_rx, // pass it here if processor needs to receive feedback
                 )
                 .await;
             });
-
             // Keep running
             println!("System running. Press Ctrl+C to stop.");
             tokio::signal::ctrl_c().await?;

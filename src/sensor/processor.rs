@@ -1,5 +1,5 @@
 use crate::common::data_types::{
-    ActuatorCommand, ControlCommand, PerformanceMetrics, SensorData, SensorType,
+    ActuatorCommand, ActuatorFeedback, ControlCommand, PerformanceMetrics, SensorData, SensorType,
 };
 use rolling_stats::Stats;
 use std::collections::HashMap;
@@ -100,7 +100,8 @@ pub async fn run_processor(
     rx: crossbeam_channel::Receiver<SensorData>,
     tx: crossbeam_channel::Sender<SensorData>,
     metrics_tx: crossbeam_channel::Sender<PerformanceMetrics>,
-    actuator_tx: crossbeam_channel::Sender<ActuatorCommand>, // New channel sender for actuator commands
+    actuator_tx: crossbeam_channel::Sender<ActuatorCommand>,
+    feedback_rx: crossbeam_channel::Receiver<ActuatorFeedback>,
 ) {
     let mut processor = DataProcessor::new(config.window_size);
 
@@ -109,70 +110,84 @@ pub async fn run_processor(
     let max_samples = 1000;
 
     loop {
-        match rx.recv() {
-            Ok(raw_data) => {
-                let start = Instant::now();
+        crossbeam_channel::select! {
+            recv(rx) -> sensor_res => {
+                match sensor_res {
+                    Ok(raw_data) => {
+                        let start = Instant::now();
 
-                let (processed_data, metrics) = processor.process(raw_data);
+                        let (processed_data, metrics) = processor.process(raw_data);
 
-                // Generate actuator command if anomaly detected
-                if let Some(act_cmd) = processor.generate_actuator_command(&processed_data) {
-                    if actuator_tx.send(act_cmd).is_err() {
-                        println!("❌ Actuator command channel closed, stopping processor.");
+                        if let Some(act_cmd) = processor.generate_actuator_command(&processed_data) {
+                            if actuator_tx.send(act_cmd).is_err() {
+                                println!("❌ Actuator command channel closed, stopping processor.");
+                                break;
+                            }
+                        }
+
+                        let elapsed = start.elapsed();
+                        let elapsed_ns = elapsed.as_nanos();
+
+                        if let Some(prev) = prev_duration {
+                            let jitter = if elapsed_ns > prev {
+                                elapsed_ns - prev
+                            } else {
+                                prev - elapsed_ns
+                            };
+                            println!(
+                                "[Processor Timing] Processing time: {} ns, Jitter: {} ns",
+                                elapsed_ns, jitter
+                            );
+                        } else {
+                            println!("[Processor Timing] Processing time: {} ns", elapsed_ns);
+                        }
+
+                        prev_duration = Some(elapsed_ns);
+
+                        durations.push(elapsed_ns);
+                        if durations.len() > max_samples {
+                            durations.remove(0);
+                        }
+
+                        if durations.len() % 100 == 0 {
+                            let min = durations.iter().min().unwrap();
+                            let max = durations.iter().max().unwrap();
+                            let avg = durations.iter().sum::<u128>() / durations.len() as u128;
+                            println!(
+                                "[Processor Stats] Min: {} ns, Max: {} ns, Avg: {} ns, Samples: {}",
+                                min,
+                                max,
+                                avg,
+                                durations.len()
+                            );
+                        }
+
+                        let _ = metrics_tx.send(metrics);
+
+                        if tx.send(processed_data).is_err() {
+                            println!("❌ Transmitter has been dropped, stopping processor.");
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        println!("❌ Sensor channel closed, stopping processor.");
                         break;
                     }
                 }
+            },
 
-                let elapsed = start.elapsed();
-                let elapsed_ns = elapsed.as_nanos();
-
-                // Calculate jitter if previous duration exists
-                if let Some(prev) = prev_duration {
-                    let jitter = if elapsed_ns > prev {
-                        elapsed_ns - prev
-                    } else {
-                        prev - elapsed_ns
-                    };
-                    println!(
-                        "[Processor Timing] Processing time: {} ns, Jitter: {} ns",
-                        elapsed_ns, jitter
-                    );
-                } else {
-                    println!("[Processor Timing] Processing time: {} ns", elapsed_ns);
+            recv(feedback_rx) -> feedback_res => {
+                match feedback_res {
+                    Ok(feedback) => {
+                        println!("Processor received actuator feedback: {:?}", feedback);
+                        // Optionally, handle actuator feedback here in processor
+                        // e.g., update internal state, adjust processing, log, etc.
+                    }
+                    Err(_) => {
+                        println!("❌ Feedback channel closed, stopping processor.");
+                        break;
+                    }
                 }
-
-                prev_duration = Some(elapsed_ns);
-
-                // Store durations for stats
-                durations.push(elapsed_ns);
-                if durations.len() > max_samples {
-                    durations.remove(0);
-                }
-
-                // Periodically print stats (e.g., every 100 cycles)
-                if durations.len() % 100 == 0 {
-                    let min = durations.iter().min().unwrap();
-                    let max = durations.iter().max().unwrap();
-                    let avg = durations.iter().sum::<u128>() / durations.len() as u128;
-                    println!(
-                        "[Processor Stats] Min: {} ns, Max: {} ns, Avg: {} ns, Samples: {}",
-                        min,
-                        max,
-                        avg,
-                        durations.len()
-                    );
-                }
-
-                let _ = metrics_tx.send(metrics);
-
-                if tx.send(processed_data).is_err() {
-                    println!("❌ Transmitter has been dropped, stopping processor.");
-                    break;
-                }
-            }
-            Err(_) => {
-                println!("❌ Sensor channel closed, stopping processor.");
-                break;
             }
         }
     }
