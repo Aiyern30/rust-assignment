@@ -1,5 +1,6 @@
 use crate::common::data_types::{
-    ActuatorCommand, ActuatorFeedback, ControlCommand, PerformanceMetrics, SensorData, SensorType,
+    ActuatorCommand, ActuatorFeedback, ActuatorStatus, ControlCommand, PerformanceMetrics,
+    SensorData, SensorType,
 };
 use rolling_stats::Stats;
 use std::collections::HashMap;
@@ -18,6 +19,98 @@ fn current_timestamp_ms() -> u64 {
 }
 
 impl DataProcessor {
+    pub fn handle_feedback(&mut self, feedback: &ActuatorFeedback) {
+        match feedback.status {
+            ActuatorStatus::Warning => {
+                if let Some(msg) = &feedback.message {
+                    if msg.contains("Deadline missed") {
+                        // Example: increase thresholds for the related sensor type to reduce sensitivity
+                        println!(
+                        "Warning received: Deadline missed, increasing threshold for actuator {}",
+                        feedback.actuator_id
+                    );
+
+                        // You need a way to map actuator_id back to SensorType, assuming a naming convention:
+                        if let Some(sensor_type) =
+                            self.actuator_id_to_sensor_type(&feedback.actuator_id)
+                        {
+                            let current_threshold = self
+                                .anomaly_thresholds
+                                .get(&sensor_type)
+                                .cloned()
+                                .unwrap_or(3.0);
+                            let new_threshold = current_threshold + 0.5; // increase by 0.5 or a suitable value
+                            self.adjust_threshold(sensor_type, new_threshold);
+                            println!(
+                                "Threshold for {:?} adjusted to {}",
+                                sensor_type, new_threshold
+                            );
+                        }
+                    }
+                }
+            }
+            ActuatorStatus::Adjusting => {
+                if let Some(msg) = &feedback.message {
+                    if msg == "increase" {
+                        if let Some(sensor_type) =
+                            self.actuator_id_to_sensor_type(&feedback.actuator_id)
+                        {
+                            let current_threshold = self
+                                .anomaly_thresholds
+                                .get(&sensor_type)
+                                .cloned()
+                                .unwrap_or(3.0);
+                            let new_threshold = (current_threshold + 0.2).min(10.0); // upper cap
+                            self.adjust_threshold(sensor_type, new_threshold);
+                            println!(
+                                "Adjusting: Increasing threshold for {:?} to {}",
+                                sensor_type, new_threshold
+                            );
+                        }
+                    } else if msg == "decrease" {
+                        if let Some(sensor_type) =
+                            self.actuator_id_to_sensor_type(&feedback.actuator_id)
+                        {
+                            let current_threshold = self
+                                .anomaly_thresholds
+                                .get(&sensor_type)
+                                .cloned()
+                                .unwrap_or(3.0);
+                            let new_threshold = (current_threshold - 0.2).max(0.1); // lower cap
+                            self.adjust_threshold(sensor_type, new_threshold);
+                            println!(
+                                "Adjusting: Decreasing threshold for {:?} to {}",
+                                sensor_type, new_threshold
+                            );
+                        }
+                    }
+                }
+            }
+            ActuatorStatus::Normal
+            | ActuatorStatus::Success
+            | ActuatorStatus::InProgress
+            | ActuatorStatus::Failure
+            | ActuatorStatus::Error => {
+                // Optionally handle other statuses if needed
+            }
+        }
+    }
+
+    /// Helper method to map actuator_id to SensorType
+    fn actuator_id_to_sensor_type(&self, actuator_id: &str) -> Option<SensorType> {
+        if actuator_id.contains("force_sensor") {
+            Some(SensorType::Force)
+        } else if actuator_id.contains("temp_sensor") {
+            Some(SensorType::Temperature)
+        } else if actuator_id.contains("position_sensor") {
+            Some(SensorType::Position)
+        } else if actuator_id.contains("velocity_sensor") {
+            Some(SensorType::Velocity)
+        } else {
+            None
+        }
+    }
+
     pub fn new(_window_size: usize) -> Self {
         let mut anomaly_thresholds = HashMap::new();
 
@@ -111,84 +204,83 @@ pub async fn run_processor(
 
     loop {
         crossbeam_channel::select! {
-            recv(rx) -> sensor_res => {
-                match sensor_res {
-                    Ok(raw_data) => {
-                        let start = Instant::now();
+                    recv(rx) -> sensor_res => {
+                        match sensor_res {
+                            Ok(raw_data) => {
+                                let start = Instant::now();
 
-                        let (processed_data, metrics) = processor.process(raw_data);
+                                let (processed_data, metrics) = processor.process(raw_data);
 
-                        if let Some(act_cmd) = processor.generate_actuator_command(&processed_data) {
-                            if actuator_tx.send(act_cmd).is_err() {
-                                println!("❌ Actuator command channel closed, stopping processor.");
+                                if let Some(act_cmd) = processor.generate_actuator_command(&processed_data) {
+                                    if actuator_tx.send(act_cmd).is_err() {
+                                        println!("❌ Actuator command channel closed, stopping processor.");
+                                        break;
+                                    }
+                                }
+
+                                let elapsed = start.elapsed();
+                                let elapsed_ns = elapsed.as_nanos();
+
+                                if let Some(prev) = prev_duration {
+                                    let jitter = if elapsed_ns > prev {
+                                        elapsed_ns - prev
+                                    } else {
+                                        prev - elapsed_ns
+                                    };
+                                    println!(
+                                        "[Processor Timing] Processing time: {} ns, Jitter: {} ns",
+                                        elapsed_ns, jitter
+                                    );
+                                } else {
+                                    println!("[Processor Timing] Processing time: {} ns", elapsed_ns);
+                                }
+
+                                prev_duration = Some(elapsed_ns);
+
+                                durations.push(elapsed_ns);
+                                if durations.len() > max_samples {
+                                    durations.remove(0);
+                                }
+
+                                if durations.len() % 100 == 0 {
+                                    let min = durations.iter().min().unwrap();
+                                    let max = durations.iter().max().unwrap();
+                                    let avg = durations.iter().sum::<u128>() / durations.len() as u128;
+                                    println!(
+                                        "[Processor Stats] Min: {} ns, Max: {} ns, Avg: {} ns, Samples: {}",
+                                        min,
+                                        max,
+                                        avg,
+                                        durations.len()
+                                    );
+                                }
+
+                                let _ = metrics_tx.send(metrics);
+
+                                if tx.send(processed_data).is_err() {
+                                    println!("❌ Transmitter has been dropped, stopping processor.");
+                                    break;
+                                }
+                            }
+                            Err(_) => {
+                                println!("❌ Sensor channel closed, stopping processor.");
                                 break;
                             }
                         }
-
-                        let elapsed = start.elapsed();
-                        let elapsed_ns = elapsed.as_nanos();
-
-                        if let Some(prev) = prev_duration {
-                            let jitter = if elapsed_ns > prev {
-                                elapsed_ns - prev
-                            } else {
-                                prev - elapsed_ns
-                            };
-                            println!(
-                                "[Processor Timing] Processing time: {} ns, Jitter: {} ns",
-                                elapsed_ns, jitter
-                            );
-                        } else {
-                            println!("[Processor Timing] Processing time: {} ns", elapsed_ns);
-                        }
-
-                        prev_duration = Some(elapsed_ns);
-
-                        durations.push(elapsed_ns);
-                        if durations.len() > max_samples {
-                            durations.remove(0);
-                        }
-
-                        if durations.len() % 100 == 0 {
-                            let min = durations.iter().min().unwrap();
-                            let max = durations.iter().max().unwrap();
-                            let avg = durations.iter().sum::<u128>() / durations.len() as u128;
-                            println!(
-                                "[Processor Stats] Min: {} ns, Max: {} ns, Avg: {} ns, Samples: {}",
-                                min,
-                                max,
-                                avg,
-                                durations.len()
-                            );
-                        }
-
-                        let _ = metrics_tx.send(metrics);
-
-                        if tx.send(processed_data).is_err() {
-                            println!("❌ Transmitter has been dropped, stopping processor.");
-                            break;
-                        }
-                    }
-                    Err(_) => {
-                        println!("❌ Sensor channel closed, stopping processor.");
-                        break;
-                    }
+                    },
+        recv(feedback_rx) -> feedback_res => {
+            match feedback_res {
+                Ok(feedback) => {
+                    println!("Processor received actuator feedback: {:?}", feedback);
+                    processor.handle_feedback(&feedback);
                 }
-            },
-
-            recv(feedback_rx) -> feedback_res => {
-                match feedback_res {
-                    Ok(feedback) => {
-                        println!("Processor received actuator feedback: {:?}", feedback);
-                        // Optionally, handle actuator feedback here in processor
-                        // e.g., update internal state, adjust processing, log, etc.
-                    }
-                    Err(_) => {
-                        println!("❌ Feedback channel closed, stopping processor.");
-                        break;
-                    }
+                Err(_) => {
+                    println!("❌ Feedback channel closed, stopping processor.");
+                    break;
                 }
             }
         }
+
+                }
     }
 }

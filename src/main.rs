@@ -125,7 +125,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     processed_tx,
                     processor_metrics_tx,
                     actuator_tx_for_processor,
-                    feedback_to_processor_rx, // pass it here if processor needs to receive feedback
+                    feedback_to_processor_rx,
                 )
                 .await;
             });
