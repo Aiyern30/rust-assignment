@@ -56,9 +56,10 @@ pub struct ActuatorFeedback {
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum ActuatorStatus {
     Normal,
+    Adjusting,
     Warning,
     Error,
     Success,

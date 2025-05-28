@@ -13,7 +13,9 @@ use rust_assignment::config::MetricsConfig;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use futures::StreamExt;
 use lapin::{options::*, types::FieldTable, BasicProperties, Connection, ConnectionProperties};
+use rand::Rng;
 use serde_json;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -45,6 +47,8 @@ async fn main() -> anyhow::Result<()> {
         );
         std::thread::spawn(move || receiver.run());
     }
+
+    let target_map: Arc<Mutex<HashMap<String, f64>>> = Arc::new(Mutex::new(HashMap::new()));
 
     initialize_actuator_control_system(shared_sensor_data, feedback_tx.clone(), command_rx);
 
@@ -99,7 +103,13 @@ async fn main() -> anyhow::Result<()> {
     println!("Waiting for actuator commands...");
     while let Some(delivery) = consumer.next().await {
         if let Ok(delivery) = delivery {
+            // let target_value = rand::thread_rng().gen_range(30.0..70.0);
+            let command_receive_time = std::time::Instant::now();
             let command: ActuatorCommand = serde_json::from_slice(&delivery.data)?;
+            let mut target_map = target_map.lock().unwrap();
+            let target_value = *target_map
+                .entry(command.actuator_id.clone())
+                .or_insert_with(|| rand::thread_rng().gen_range(30.0..70.0));
 
             println!("ACTUATOR received command for [{}]:", command.actuator_id);
             println!("  → type: {}", command.control_command.command_type);
@@ -113,7 +123,13 @@ async fn main() -> anyhow::Result<()> {
             let control = pid.compute(command.control_command.value, measurement, dt);
 
             // Execute the control
-            executor.execute(control);
+            executor.execute(control.clone());
+
+            let elapsed = command_receive_time.elapsed().as_millis();
+            println!(
+                "⏱️ Execution time for actuator {}: {} ms",
+                command.actuator_id, elapsed
+            );
 
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -121,6 +137,34 @@ async fn main() -> anyhow::Result<()> {
                 .as_millis();
 
             let missed_deadline = now > command.deadline;
+            // let is_within_tolerance = (sensor_data.value - *target).abs() <= 0.1;
+            // let tolerance = (command.control_command.value.abs()) * 0.1;
+            // let is_within_tolerance =
+            //     (command.control_command.value - control.value).abs() <= tolerance;
+
+            let mut _is_within_tolerance = false;
+            let tolerance = 0.5;
+            let sensor_value = command.control_command.value;
+
+            //if (sensor_value >= target_value - tolerance) && (sensor_value <= target_value + tolerance) {
+            //     is_within_tolerance = true;
+            // } else {
+            //     is_within_tolerance = false;
+            // }
+
+            _is_within_tolerance = (sensor_value - target_value).abs() <= tolerance;
+
+            let feedback_msg = if (sensor_value - target_value).abs() <= tolerance {
+                "=".to_string()
+            } else if sensor_value < target_value {
+                "increase".to_string()
+            } else {
+                "decrease".to_string()
+            };
+            println!(
+                "📣 FEEDBACK message for [{}]: {}",
+                command.actuator_id, feedback_msg
+            );
 
             // Send feedback
             let feedback = ActuatorFeedback {
@@ -130,8 +174,10 @@ async fn main() -> anyhow::Result<()> {
                 // status: ActuatorStatus::Success,
                 status: if missed_deadline {
                     ActuatorStatus::Warning
-                } else {
+                } else if _is_within_tolerance {
                     ActuatorStatus::Success
+                } else {
+                    ActuatorStatus::Adjusting
                 },
                 // message: Some(format!(
                 //     "Executed command_type: {}",
@@ -143,10 +189,7 @@ async fn main() -> anyhow::Result<()> {
                         now, command.deadline
                     ))
                 } else {
-                    Some(format!(
-                        "✅ Command executed on time. Remaining = {}ms",
-                        command.deadline.saturating_sub(now)
-                    ))
+                    Some(feedback_msg)
                 },
             };
 

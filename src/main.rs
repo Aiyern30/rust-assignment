@@ -106,7 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let (actuator_command_tx, actuator_command_rx) = crossbeam_channel::unbounded();
 
             // Other channels
-            let (processed_tx, processed_rx) = bounded::<common::data_types::SensorData>(100);
+            let (processed_tx, _processed_rx) = bounded::<common::data_types::SensorData>(100);
             let (metrics_tx, metrics_rx) = unbounded::<common::data_types::PerformanceMetrics>();
             let (actuator_tx, actuator_rx) = bounded::<common::data_types::ActuatorCommand>(100);
             let (feedback_tx, feedback_rx) = unbounded::<common::data_types::ActuatorFeedback>();
@@ -170,7 +170,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Clone actuator_tx for processor and transmitter
             let actuator_tx_for_processor = actuator_tx.clone();
-            let actuator_tx_for_transmitter = actuator_tx.clone();
+            let _actuator_tx_for_transmitter = actuator_tx.clone();
 
             // Spawn processor task with processor's sensor receiver
             let processor_config = config.processor.clone();

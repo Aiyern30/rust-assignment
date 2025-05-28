@@ -35,7 +35,7 @@ impl MetricsCollector {
         let entry = metrics_lock.entry(metrics.operation.clone()).or_default();
         entry.push(metrics);
     }
-    pub fn record_sensor_data(&self, _data: &SensorData) {
+    pub fn _record_sensor_data(&self, _data: &SensorData) {
     let now = Instant::now();
     
     let metrics = PerformanceMetrics {

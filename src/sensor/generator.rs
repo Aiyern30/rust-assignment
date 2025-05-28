@@ -20,11 +20,13 @@ impl SensorGenerator {
         sensor_id: &str,
         sensor_type: SensorType,
         sample_rate_ms: u64,
-        base_value: f64,
+        _base_value: f64,
         noise_level: f64,
         drift_factor: f64,
     ) -> Self {
         let normal_dist = Normal::new(0.0, noise_level).unwrap();
+        let mut rng = SmallRng::from_entropy();
+        let initial_value = rng.gen_range(0.0..100.0);
 
         Self {
             sensor_id: sensor_id.to_string(),
@@ -35,7 +37,7 @@ impl SensorGenerator {
             rng: SmallRng::from_entropy(),
 
             normal_dist,
-            last_value: base_value,
+            last_value: initial_value,
         }
     }
 
@@ -144,7 +146,8 @@ pub async fn run_sensor_array(
         config.sample_rate_ms * 2, // Slower sampling for temperature
         25.0,                      // Base value (25 degrees C)
         0.1,                       // Noise level
-        0.002,                     // Drift factor
+        0.002,
+        // Drift factor
     );
 
     handles.push(tokio::spawn({

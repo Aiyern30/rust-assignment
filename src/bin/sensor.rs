@@ -1,34 +1,15 @@
-// #[tokio::main]
-// async fn main() -> anyhow::Result<()> {
-//     use crossbeam_channel::{unbounded, Receiver, Sender};
-//     use rust_assignment::common::data_types::{ActuatorCommand, ActuatorFeedback};
-//     use rust_assignment::sensor::transmitter::run_transmitter;
-
-//     let (_command_tx, command_rx): (Sender<ActuatorCommand>, Receiver<ActuatorCommand>) =
-//         unbounded();
-//     let (feedback_tx, feedback_rx): (Sender<ActuatorFeedback>, Receiver<ActuatorFeedback>) =
-//         unbounded();
-
-//     println!("Starting SENSOR system with RabbitMQ...");
-
-//     // You might generate and send commands here or spawn processor/generator logic
-//     tokio::spawn(run_transmitter(command_rx, feedback_tx));
-
-//     // Just print incoming feedback for now
-//     while let Ok(feedback) = feedback_rx.recv() {
-//         println!("Sensor received feedback: {:?}", feedback);
-//     }
-
-//     Ok(())
-// }
-
 use crossbeam_channel::unbounded;
+use rand::Rng;
+use rust_assignment::common::data_types::ActuatorStatus;
 use rust_assignment::common::data_types::{
     ActuatorCommand, ActuatorFeedback, PerformanceMetrics, SensorData,
 };
 use rust_assignment::config::SensorConfig;
 use rust_assignment::sensor::generator::run_sensor_array;
 use rust_assignment::sensor::transmitter::run_transmitter;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -37,6 +18,7 @@ async fn main() -> anyhow::Result<()> {
 
     let (sensor_tx, sensor_rx) = unbounded::<SensorData>();
     let (metrics_tx, _metrics_rx) = unbounded::<PerformanceMetrics>();
+    // let mut current_value = rand::thread_rng().gen_range(10.0..90.0);
 
     let config = SensorConfig {
         sample_rate_ms: 100,
@@ -65,11 +47,36 @@ async fn main() -> anyhow::Result<()> {
     println!("SENSOR started");
 
     tokio::spawn(run_transmitter(command_rx, feedback_tx.clone()));
+    let completed: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
+    let mut value_map: HashMap<String, f64> = HashMap::new();
 
     // Listen for feedback
     while let Ok(feedback) = feedback_rx.recv() {
+        if let Some(value) = value_map.get_mut(&feedback.actuator_id) {
+            match feedback.message.as_deref() {
+                Some("increase") => *value += 1.0,
+                Some("decrease") => *value -= 1.0,
+                _ => {}
+            }
+        }
+
+        if feedback.status == ActuatorStatus::Success {
+            completed
+                .lock()
+                .unwrap()
+                .insert(feedback.actuator_id.clone());
+        }
+
         println!("SENSOR received feedback: {:?}", feedback);
     }
+
+    // while let Ok(data) = sensor_rx.recv() {
+    //     let actuator_id = format!("actuator_for_{}", data.sensor_id);
+    //     if !completed.lock().unwrap().contains(&actuator_id) {
+    //         let cmd = ActuatorCommand::from_sensor_data(&data);
+    //         let _ = command_tx.send(cmd);
+    //     }
+    // }
 
     Ok(())
 }
