@@ -51,7 +51,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let (metrics_tx, metrics_rx) = unbounded::<common::data_types::PerformanceMetrics>();
             let (actuator_tx, actuator_rx) = bounded::<common::data_types::ActuatorCommand>(100);
             let (feedback_tx, feedback_rx) = unbounded::<common::data_types::ActuatorFeedback>();
-            let feedback_tx_clone = feedback_tx.clone();
             tokio::spawn(async move {
                 while let Ok(cmd) = actuator_rx.recv() {
                     println!(
