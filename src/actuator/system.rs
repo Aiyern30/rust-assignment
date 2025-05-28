@@ -3,16 +3,18 @@ use crate::common::constants::*;
 use crate::common::data_types::{ActuatorCommand, ActuatorFeedback, ActuatorStatus, SensorData};
 use crossbeam_channel::{Receiver, Sender};
 use futures::StreamExt;
+use lapin::BasicProperties;
 use lapin::{options::*, types::FieldTable, Connection, ConnectionProperties};
 use rand::Rng;
 use serde_json;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::mpsc;
 
 pub async fn run_actuator_system(
-    _sensor_data_rx: Receiver<crate::common::data_types::SensorData>,
-    _feedback_tx: Sender<ActuatorFeedback>,
+    _sensor_data_rx: Receiver<SensorData>,
+    feedback_tx: Sender<ActuatorFeedback>,
     command_tx: Sender<ActuatorCommand>,
 ) -> anyhow::Result<()> {
     let conn =
@@ -35,7 +37,36 @@ pub async fn run_actuator_system(
         )
         .await?;
 
-    // Consume actuator commands
+    let publish_channel = channel.clone();
+
+    // ✅ Create async feedback channel using tokio
+    let (publish_tx, mut publish_rx) = mpsc::unbounded_channel::<ActuatorFeedback>();
+
+    tokio::spawn(async move {
+        while let Some(feedback) = publish_rx.recv().await {
+            if let Ok(data) = serde_json::to_vec(&feedback) {
+                match publish_channel
+                    .basic_publish(
+                        "",
+                        ACTUATOR_FEEDBACK_QUEUE,
+                        BasicPublishOptions::default(),
+                        &data,
+                        BasicProperties::default(),
+                    )
+                    .await
+                {
+                    Ok(confirm) => match confirm.await {
+                        Ok(_) => {
+                            println!("✅ Published ActuatorFeedback to RabbitMQ: {:?}", feedback)
+                        }
+                        Err(e) => eprintln!("❌ Failed to confirm publication: {:?}", e),
+                    },
+                    Err(e) => eprintln!("❌ Failed to publish feedback to RabbitMQ: {:?}", e),
+                }
+            }
+        }
+    });
+
     let mut consumer = channel
         .basic_consume(
             ACTUATOR_COMMAND_QUEUE,
@@ -47,24 +78,36 @@ pub async fn run_actuator_system(
 
     println!("📡 Waiting for ACTUATOR_COMMANDS...");
 
+    let tx_for_feedback = feedback_tx.clone();
+    let publish_tx_clone = publish_tx.clone();
+
     while let Some(delivery) = consumer.next().await {
         if let Ok(delivery) = delivery {
-            let command: ActuatorCommand = serde_json::from_slice(&delivery.data)?;
+            let command: ActuatorCommand = match serde_json::from_slice(&delivery.data) {
+                Ok(cmd) => cmd,
+                Err(e) => {
+                    eprintln!("⚠️ Failed to deserialize actuator command: {}", e);
+                    delivery.nack(BasicNackOptions::default()).await?;
+                    continue;
+                }
+            };
 
-            // Process command (e.g., run controller logic)
-            command_tx.send(command.clone()).ok();
+            println!("📥 Received ActuatorCommand: {:?}", command);
+            let _ = command_tx.send(command.clone());
 
-            // let fb_data = serde_json::to_vec(&feedback)?;
-            // channel
-            //     .basic_publish(
-            //         "",
-            //         ACTUATOR_FEEDBACK_QUEUE,
-            //         BasicPublishOptions::default(),
-            //         &fb_data,
-            //         BasicProperties::default(),
-            //     )
-            //     .await?
-            //     .await?;
+            // ✅ Use InProgress instead of Received
+            let feedback = ActuatorFeedback {
+                timestamp: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis(),
+                actuator_id: command.actuator_id.clone(),
+                status: ActuatorStatus::InProgress,
+                message: Some("Command received and forwarded.".to_string()),
+            };
+
+            let _ = tx_for_feedback.send(feedback.clone());
+            let _ = publish_tx_clone.send(feedback);
 
             delivery.ack(BasicAckOptions::default()).await?;
         }
