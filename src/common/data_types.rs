@@ -10,6 +10,7 @@ pub struct SensorData {
     pub value: f64,               // Actual sensor reading
     pub is_anomaly: bool,         // Flag for anomalies
     pub confidence: f64,          // Confidence level (0.0-1.0)
+    pub forwarded_at: u128,       // Timestamp when data was forwarded
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControlCommand {
@@ -36,6 +37,7 @@ pub struct ActuatorCommand {
     pub control_command: ControlCommand,
     pub priority: u8,
     pub deadline: u128,
+    pub forwarded_at: Option<u128>, // Timestamp when command was forwarded
 }
 
 // Types of sensors we might simulate
@@ -56,9 +58,10 @@ pub struct ActuatorFeedback {
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum ActuatorStatus {
     Normal,
+    Adjusting,
     Warning,
     Error,
     Success,
@@ -164,6 +167,7 @@ impl ActuatorCommand {
             control_command,
             priority,
             deadline,
+            forwarded_at: None, // This will be set when the command is forwarded
         }
     }
 }
