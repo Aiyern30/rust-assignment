@@ -10,9 +10,13 @@ use rust_assignment::sensor::transmitter::run_transmitter;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // let mut send_timestamps: HashMap<String, u128> = HashMap::new();
+    let send_timestamps: Arc<Mutex<HashMap<String, u128>>> = Arc::new(Mutex::new(HashMap::new()));
+
     let (command_tx, command_rx) = unbounded::<ActuatorCommand>();
     let (feedback_tx, feedback_rx) = unbounded::<ActuatorFeedback>();
 
@@ -34,11 +38,16 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // Convert SensorData into ActuatorCommand
+    let send_timestamps_clone = Arc::clone(&send_timestamps);
     tokio::spawn({
         let command_tx = command_tx.clone();
         async move {
             while let Ok(data) = sensor_rx.recv() {
                 let cmd = ActuatorCommand::from_sensor_data(&data);
+                send_timestamps_clone
+                    .lock()
+                    .unwrap()
+                    .insert(cmd.actuator_id.clone(), data.timestamp); // moved here
                 let _ = command_tx.send(cmd);
             }
         }
@@ -68,6 +77,25 @@ async fn main() -> anyhow::Result<()> {
         }
 
         println!("SENSOR received feedback: {:?}", feedback);
+
+        let received_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+
+        // let total_round_trip = received_time - original_sensor_timestamp;
+        // println!(
+        //     "🔁 Full round-trip time SENSOR → ACTUATOR → SENSOR: {} ms",
+        //     total_round_trip
+        // );
+
+        if let Some(sent_time) = send_timestamps.lock().unwrap().get(&feedback.actuator_id) {
+            let total_round_trip = received_time - *sent_time;
+            println!(
+                "🔁 Full round-trip time SENSOR → ACTUATOR → SENSOR ({}): {} ms",
+                feedback.actuator_id, total_round_trip
+            );
+        }
     }
 
     // while let Ok(data) = sensor_rx.recv() {

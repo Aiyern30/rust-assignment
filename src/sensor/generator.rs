@@ -78,6 +78,7 @@ impl SensorGenerator {
             value: final_value,
             is_anomaly,
             confidence: 1.0, // Will be adjusted by processor
+            forwarded_at: 0, // Will be set when sent
         };
 
         metrics.complete(true);

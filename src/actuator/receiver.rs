@@ -1,4 +1,5 @@
 use crossbeam_channel::Receiver;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::common::{
     data_types::{PerformanceMetrics, SensorData},
@@ -27,8 +28,23 @@ impl ReceiverTask {
 
     pub fn run(&mut self) {
         println!("Actuator receiver started.");
-        while let Ok(sensor_data) = self.rx.recv() {
+        while let Ok(mut sensor_data) = self.rx.recv() {
             let start_time = std::time::Instant::now();
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis();
+
+            let time_from_sensor = now - sensor_data.timestamp;
+            println!("⏱️ Time from SENSOR to RECEIVER: {} ms", time_from_sensor);
+            let forward_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis();
+
+            let mut sensor_data = sensor_data.clone();
+            sensor_data.forwarded_at = forward_time;
+
             self.metrics_collector._record_sensor_data(&sensor_data);
 
             // Update the shared sensor data

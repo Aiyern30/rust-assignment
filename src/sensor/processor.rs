@@ -82,6 +82,7 @@ impl DataProcessor {
                     .unwrap()
                     .as_millis()
                     + 2000, // 2 seconds from now
+                forwarded_at: Some(current_timestamp_ms().into()),
             })
         } else {
             None
