@@ -38,12 +38,8 @@ impl SensorGenerator {
             rng: SmallRng::from_entropy(),
 
             normal_dist,
-<<<<<<< HEAD
-            last_value: base_value,
+            last_value: initial_value, // Start with a random base value
             last_emit_time: None,
-=======
-            last_value: initial_value,
->>>>>>> ft/weifong
         }
     }
 

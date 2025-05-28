@@ -4,19 +4,14 @@ use rust_assignment::common::data_types::{
     ActuatorCommand, ActuatorFeedback, ActuatorStatus, ControlCommand,
 };
 use rust_assignment::common::data_types::{SensorData, SensorType};
+use rust_assignment::sensor::generator::SensorGenerator;
 use rust_assignment::sensor::processor::DataProcessor;
 use std::hint::black_box;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn benchmark_generate_reading(c: &mut Criterion) {
-    let mut generator = SensorGenerator::new(
-        "test_sensor",
-        SensorType::Force,
-        100,     
-        10.0,    
-        0.2,     
-        0.01,     
-    );
+    let mut generator =
+        SensorGenerator::new("test_sensor", SensorType::Force, 100, 10.0, 0.2, 0.01);
 
     c.bench_function("sensor_generate_reading", |b| {
         b.iter(|| {
@@ -123,7 +118,6 @@ pub fn benchmark_serialization(c: &mut Criterion) {
     });
 }
 
-<<<<<<< HEAD
 /// Benchmark ActuatorFeedback deserialization
 pub fn benchmark_actuator_feedback_deserialization(c: &mut Criterion) {
     let json = br#"{
@@ -155,6 +149,7 @@ pub fn benchmark_transmitter_encode_step(c: &mut Criterion) {
         },
         priority: 2,
         deadline: 9876543210,
+        forwarded_at: todo!(),
     };
 
     c.bench_function("transmitter_encode_sim", |b| {
@@ -165,15 +160,10 @@ pub fn benchmark_transmitter_encode_step(c: &mut Criterion) {
     });
 }
 
-
-criterion_group!(benches, benchmark_generate_reading,benchmark_processor, benchmark_serialization);
-criterion_main!(benches);
-=======
 criterion_group!(
     benches,
+    benchmark_generate_reading,
     benchmark_processor,
-    benchmark_serialization,
-    benchmark_actuator_processing
+    benchmark_serialization
 );
 criterion_main!(benches);
->>>>>>> ft/weifong

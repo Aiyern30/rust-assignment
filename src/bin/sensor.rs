@@ -61,17 +61,6 @@ async fn main() -> anyhow::Result<()> {
 
     // Listen for feedback
     while let Ok(feedback) = feedback_rx.recv() {
-<<<<<<< HEAD
-        println!(
-            "[Feedback: {:<25}] | Status: {:<8} | Message: {}",
-            feedback.actuator_id,
-            format!("{:?}", feedback.status),
-            feedback
-                .message
-                .clone()
-                .unwrap_or_else(|| "None".to_string())
-        );
-=======
         if let Some(value) = value_map.get_mut(&feedback.actuator_id) {
             match feedback.message.as_deref() {
                 Some("increase") => *value += 1.0,
@@ -107,7 +96,6 @@ async fn main() -> anyhow::Result<()> {
                 feedback.actuator_id, total_round_trip
             );
         }
->>>>>>> ft/weifong
     }
 
     // while let Ok(data) = sensor_rx.recv() {

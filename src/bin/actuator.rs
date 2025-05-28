@@ -16,6 +16,7 @@ use rand::Rng;
 use serde_json;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -129,8 +130,6 @@ async fn main() -> anyhow::Result<()> {
                 command.actuator_id, elapsed
             );
 
-<<<<<<< HEAD
-=======
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -166,18 +165,10 @@ async fn main() -> anyhow::Result<()> {
                 command.actuator_id, feedback_msg
             );
 
->>>>>>> ft/weifong
             // Send feedback
             let feedback = ActuatorFeedback {
                 timestamp: Utc::now().timestamp_millis() as u128,
                 actuator_id: command.actuator_id.clone(),
-<<<<<<< HEAD
-                status: ActuatorStatus::Success,
-                message: Some(format!(
-                    "Executed command_type: {}",
-                    command.control_command.command_type
-                )),
-=======
                 // status: ActuatorStatus::Success,
                 status: if missed_deadline {
                     ActuatorStatus::Warning
@@ -198,7 +189,6 @@ async fn main() -> anyhow::Result<()> {
                 } else {
                     Some(feedback_msg)
                 },
->>>>>>> ft/weifong
             };
 
             let feedback_bytes = serde_json::to_vec(&feedback)?;
