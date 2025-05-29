@@ -58,7 +58,7 @@ pub fn benchmark_actuator_processing(c: &mut Criterion) {
 
     c.bench_function("actuator_processing", |b| {
         b.iter(|| {
-            let control = pid.compute(75.0, command.control_command.value, 0.005);
+            let _control = pid.compute(75.0, command.control_command.value, 0.005);
             let status = if (75.0 - command.control_command.value).abs() <= 0.5 {
                 ActuatorStatus::Success
             } else {
@@ -136,8 +136,8 @@ pub fn benchmark_actuator_feedback_deserialization(c: &mut Criterion) {
 }
 
 /// Simulate just the encoding step in transmitter
-pub fn benchmark_transmitter_encode_step(c: &mut Criterion) {
-    let command = ActuatorCommand {
+pub fn benchmark_transmitter_encode_step() {
+    let _command = ActuatorCommand {
         command_id: "CMD999".to_string(),
         actuator_id: "A2".to_string(),
         control_command: ControlCommand {
@@ -145,25 +145,18 @@ pub fn benchmark_transmitter_encode_step(c: &mut Criterion) {
             payload: Some("Target=42".to_string()),
             timestamp: 1234567890,
             value: 42.0,
-            deadline: todo!(),
+            deadline: 1234567999,
         },
         priority: 2,
         deadline: 9876543210,
-        forwarded_at: todo!(),
+        forwarded_at: Some(1234567999),
     };
-
-    c.bench_function("transmitter_encode_sim", |b| {
-        b.iter(|| {
-            let json = black_box(serde_json::to_vec(&command).unwrap());
-            black_box(json);
-        });
-    });
 }
 
 criterion_group!(
     benches,
     benchmark_generate_reading,
     benchmark_processor,
-    benchmark_serialization
+    benchmark_serialization,
 );
 criterion_main!(benches);
