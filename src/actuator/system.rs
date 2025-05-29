@@ -116,6 +116,7 @@ pub async fn run_actuator_system(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn initialize_actuator_control_system(
     shared_sensor_data: Arc<Mutex<Option<SensorData>>>,
     feedback_tx: Sender<ActuatorFeedback>,
@@ -126,7 +127,6 @@ pub fn initialize_actuator_control_system(
 
     let controller = Arc::new(Mutex::new(PIDController::new(1.0, 0.1, 0.05)));
     let executor = Arc::new(Executor::new());
-    // let shared = Arc::clone(&shared_sensor_data);
 
     let tx = feedback_tx.clone();
     let command_map: Arc<Mutex<HashMap<String, Vec<ActuatorCommand>>>> =
@@ -151,6 +151,7 @@ pub fn initialize_actuator_control_system(
     let shared_map = Arc::clone(&command_map);
     let shared_sensor = Arc::clone(&shared_sensor_data);
     let overheat_flag = Arc::new(Mutex::new(false)); // true = overheat active
+    let overheat_flag_clone = Arc::clone(&overheat_flag);
 
     scheduler.start(shared_map, move |actuator_id, command| {
         // Delay since receiver forwarded the command
@@ -180,6 +181,47 @@ pub fn initialize_actuator_control_system(
 
         let maybe_data = shared_sensor.lock().unwrap().clone();
         if let Some(sensor_data) = maybe_data {
+            // Check for overheating condition
+            let is_overheating = sensor_data.value > 90.0; // Temperature threshold
+            {
+                let mut overheat = overheat_flag_clone.lock().unwrap();
+                if is_overheating && !*overheat {
+                    println!(
+                        "🔥 OVERHEAT WARNING for [{}]: temp = {:.2}°C",
+                        actuator_id, sensor_data.value
+                    );
+                    *overheat = true;
+                } else if !is_overheating && *overheat {
+                    println!(
+                        "❄️ Temperature normalized for [{}]: temp = {:.2}°C",
+                        actuator_id, sensor_data.value
+                    );
+                    *overheat = false;
+                }
+            }
+
+            // Skip control if overheating
+            let is_currently_overheating = *overheat_flag_clone.lock().unwrap();
+            if is_currently_overheating {
+                println!(
+                    "⚠️ Skipping control for [{}] due to overheating",
+                    actuator_id
+                );
+                let feedback = ActuatorFeedback {
+                    timestamp: SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis(),
+                    actuator_id: format!("actuator_for_{}", actuator_id.clone()),
+                    status: ActuatorStatus::Warning,
+                    message: Some(format!(
+                        "OVERHEATING: temp = {:.2}°C - control disabled",
+                        sensor_data.value
+                    )),
+                };
+                let _ = tx.send(feedback);
+                return;
+            }
             let mut pid = ctrl.lock().unwrap();
 
             let control_start = SystemTime::now()
@@ -195,6 +237,13 @@ pub fn initialize_actuator_control_system(
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_millis();
+
+            // Calculate control execution time using control_start
+            let control_duration = execution_end_time - control_start;
+            println!(
+                "⏱️ Control execution time for [{}]: {} ms",
+                actuator_id, control_duration
+            );
 
             // Check if converged
             let diff = target - sensor_data.value;

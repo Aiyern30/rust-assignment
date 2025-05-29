@@ -14,7 +14,6 @@ pub struct ReceiverTask {
     shared_sensor_data: Arc<Mutex<Option<SensorData>>>,
 }
 #[allow(dead_code)]
-
 impl ReceiverTask {
     pub fn new(
         rx: Receiver<SensorData>,
