@@ -1,5 +1,5 @@
 use crossbeam_channel::unbounded;
-use rand::Rng;
+
 use rust_assignment::common::data_types::ActuatorStatus;
 use rust_assignment::common::data_types::{
     ActuatorCommand, ActuatorFeedback, PerformanceMetrics, SensorData,
@@ -14,7 +14,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // let mut send_timestamps: HashMap<String, u128> = HashMap::new();
     let send_timestamps: Arc<Mutex<HashMap<String, u128>>> = Arc::new(Mutex::new(HashMap::new()));
 
     let (command_tx, command_rx) = unbounded::<ActuatorCommand>();
@@ -22,7 +21,6 @@ async fn main() -> anyhow::Result<()> {
 
     let (sensor_tx, sensor_rx) = unbounded::<SensorData>();
     let (metrics_tx, _metrics_rx) = unbounded::<PerformanceMetrics>();
-    // let mut current_value = rand::thread_rng().gen_range(10.0..90.0);
 
     let config = SensorConfig {
         sample_rate_ms: 100,
@@ -47,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
                 send_timestamps_clone
                     .lock()
                     .unwrap()
-                    .insert(cmd.actuator_id.clone(), data.timestamp); // moved here
+                    .insert(cmd.actuator_id.clone(), data.timestamp);
                 let _ = command_tx.send(cmd);
             }
         }
@@ -83,12 +81,6 @@ async fn main() -> anyhow::Result<()> {
             .unwrap()
             .as_millis();
 
-        // let total_round_trip = received_time - original_sensor_timestamp;
-        // println!(
-        //     "🔁 Full round-trip time SENSOR → ACTUATOR → SENSOR: {} ms",
-        //     total_round_trip
-        // );
-
         if let Some(sent_time) = send_timestamps.lock().unwrap().get(&feedback.actuator_id) {
             let total_round_trip = received_time - *sent_time;
             println!(
@@ -97,14 +89,6 @@ async fn main() -> anyhow::Result<()> {
             );
         }
     }
-
-    // while let Ok(data) = sensor_rx.recv() {
-    //     let actuator_id = format!("actuator_for_{}", data.sensor_id);
-    //     if !completed.lock().unwrap().contains(&actuator_id) {
-    //         let cmd = ActuatorCommand::from_sensor_data(&data);
-    //         let _ = command_tx.send(cmd);
-    //     }
-    // }
 
     Ok(())
 }
