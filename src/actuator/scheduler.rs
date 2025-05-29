@@ -63,7 +63,22 @@ impl Scheduler {
                                 println!("⏱️ Scheduler delay for [{}]: {} ms", actuator_id, delay);
                             }
 
-                            task_fn(actuator_id.clone(), command);
+                            // Run the task
+                            task_fn(actuator_id.clone(), command.clone());
+                            let now = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap()
+                                .as_millis();
+
+                            let wait_time = now - command.forwarded_at.unwrap_or(0);
+                            let deadline = if command.priority >= 10 { 1 } else { 2 };
+
+                            if wait_time > deadline {
+                                eprintln!(
+                                    "⏱️ Actuator {} missed deadline ({}ms > {}ms)",
+                                    actuator_id, wait_time, deadline
+                                );
+                            }
                         }
                     }
 

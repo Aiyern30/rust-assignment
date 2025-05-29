@@ -37,7 +37,14 @@ impl ReceiverTask {
                 .as_millis();
 
             let time_from_sensor = now - sensor_data.timestamp;
-            println!("⏱️ Time from SENSOR to RECEIVER: {} ms", time_from_sensor);
+            if time_from_sensor > 1 {
+                eprintln!(
+                    "⏱️ Missed sensor-to-receiver deadline! Took {} ms",
+                    time_from_sensor
+                );
+            } else {
+                println!("⏱️ Time from SENSOR to RECEIVER: {} ms", time_from_sensor);
+            }
             let forward_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()

@@ -74,6 +74,38 @@ pub fn benchmark_actuator_processing(c: &mut Criterion) {
             black_box(_feedback);
         });
     });
+    let elapsed = current_time() - command.forwarded_at.unwrap();
+    if elapsed > 2 {
+        println!("⚠️ Missed actuator response deadline: {}ms", elapsed);
+    } else {
+        println!("✅ Actuator response within deadline: {}ms", elapsed);
+    }
+}
+
+pub fn benchmark_multiple_actuators(c: &mut Criterion) {
+    c.bench_function("multiple_actuator_commands", |b| {
+        b.iter(|| {
+            let mut cmds = vec![];
+            for i in 0..100 {
+                let cmd = ActuatorCommand {
+                    command_id: format!("cmd{}", i),
+                    actuator_id: format!("A{}", i % 10),
+                    control_command: ControlCommand {
+                        command_type: "Move".into(),
+                        payload: Some("left".into()),
+                        timestamp: current_time(),
+                        value: 1.0,
+                        deadline: current_time() + 2,
+                    },
+                    priority: i % 5,
+                    deadline: current_time() + 2,
+                    forwarded_at: Some(current_time()),
+                };
+                cmds.push(cmd);
+            }
+            black_box(cmds);
+        });
+    });
 }
 
 fn current_time() -> u128 {
@@ -194,6 +226,7 @@ criterion_group!(
     benchmark_actuator_processing,
     benchmark_serialization,
     benchmark_actuator_feedback_deserialization,
+    benchmark_multiple_actuators,
     benchmark_transmitter_encode_step,
     benchmark_simulated_transmission
 );
