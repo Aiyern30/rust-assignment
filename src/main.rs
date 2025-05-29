@@ -129,6 +129,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await;
             });
+            tokio::spawn(async move {
+                while let Ok(command) = actuator_command_rx.recv() {
+                    println!("Received external actuator command: {:?}", command);
+
+                    // Forward the command to the actuator system
+                    if let Err(e) = actuator_tx.send(command) {
+                        eprintln!("Failed to forward actuator command: {:?}", e);
+                    }
+                }
+            });
             // Keep running
             println!("System running. Press Ctrl+C to stop.");
             tokio::signal::ctrl_c().await?;
