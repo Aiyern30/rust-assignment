@@ -8,16 +8,6 @@ impl Executor {
         Self {}
     }
 
-    // pub fn execute(&self, command: ControlCommand) {
-    //     println!(
-    //         "[{}] Executing {} command with value: {:.4}",
-    //         command.timestamp, command.command_type, command.value
-    //     );
-
-    //     if let Some(payload) = &command.payload {
-    //         println!("Payload: {}", payload);
-    //     }
-    // }
     pub fn execute(&self, command: ControlCommand) {
         let start = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -29,8 +19,7 @@ impl Executor {
             start, command.value
         );
 
-        // Simulate actuator processing
-        std::thread::sleep(std::time::Duration::from_millis(5)); // if needed
+        std::thread::sleep(std::time::Duration::from_millis(5));
 
         let end = SystemTime::now()
             .duration_since(UNIX_EPOCH)

@@ -9,7 +9,6 @@ use tokio::time;
 
 use super::data_types::SensorData;
 
-// Metrics collector for benchmarking performance
 pub struct MetricsCollector {
     metrics: Arc<Mutex<HashMap<String, Vec<PerformanceMetrics>>>>,
     last_report_time: Instant,
@@ -29,7 +28,6 @@ impl MetricsCollector {
         }
     }
     
-    // Add a new metrics record
     pub fn add_metrics(&self, metrics: PerformanceMetrics) {
         let mut metrics_lock = self.metrics.lock().unwrap();
         let entry = metrics_lock.entry(metrics.operation.clone()).or_default();
@@ -41,15 +39,14 @@ impl MetricsCollector {
     let metrics = PerformanceMetrics {
         operation: "sensor_data_received".to_string(),
         start_time: now,
-        end_time: Some(now), // or `None` if the operation is still in progress
-        duration_ms: Some(0.0), // You can calculate actual duration if needed
+        end_time: Some(now), 
+        duration_ms: Some(0.0),
         success: true,
     };
 
     self.add_metrics(metrics);
 }
     
-    // Generate a report of current metrics
     pub fn generate_report(&self) -> HashMap<String, OperationStats> {
         let metrics_lock = self.metrics.lock().unwrap();
         let mut report = HashMap::new();
@@ -59,12 +56,10 @@ impl MetricsCollector {
                 continue;
             }
             
-            // Calculate statistics
             let total = metrics.len();
             let success_count = metrics.iter().filter(|m| m.success).count();
             let success_rate = success_count as f64 / total as f64 * 100.0;
             
-            // Calculate average duration
             let durations: Vec<f64> = metrics
                 .iter()
                 .filter_map(|m| m.duration_ms)
@@ -76,11 +71,9 @@ impl MetricsCollector {
                 0.0
             };
             
-            // Calculate min and max durations
             let min_duration = durations.iter().fold(f64::INFINITY, |a, &b| a.min(b));
             let max_duration = durations.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
             
-            // Calculate jitter (standard deviation of durations)
             let jitter = if durations.len() > 1 {
                 let mean = avg_duration;
                 let variance = durations.iter()
@@ -91,7 +84,6 @@ impl MetricsCollector {
                 0.0
             };
             
-            // Calculate missed deadlines
             let mut missed_deadlines = 0;
             for m in metrics {
                 if let Some(duration) = m.duration_ms {
@@ -128,9 +120,7 @@ impl MetricsCollector {
         report
     }
     
-    // Log report to console and file
     pub fn log_report(&self, report: &HashMap<String, OperationStats>) {
-        // Print to console
         println!("--- Performance Report ---");
         println!("Time: {}", Local::now().format("%Y-%m-%d %H:%M:%S"));
         println!("{:<20} | {:<10} | {:<10} | {:<15} | {:<15} | {:<15} | {:<10} | {:<15}", 
@@ -146,7 +136,6 @@ impl MetricsCollector {
         }
         println!("{:-<130}", "");
         
-        // Log to file if enabled
         if self.log_to_file {
             let log = format!(
                 "Time: {}\n{:<20} | {:<10} | {:<10} | {:<15} | {:<15} | {:<15} | {:<10} | {:<15}\n{:-<130}\n", 
@@ -156,7 +145,6 @@ impl MetricsCollector {
                 ""
             );
             
-            // Open the file in append mode
             let mut file = match OpenOptions::new()
                 .create(true)
                 .append(true)
@@ -168,13 +156,11 @@ impl MetricsCollector {
                 }
             };
             
-            // Write header
             if let Err(e) = file.write_all(log.as_bytes()) {
                 println!("Failed to write to log file: {}", e);
                 return;
             }
             
-            // Write data
             for stats in report.values() {
                 let line = format!(
                     "{:<20} | {:<10} | {:<10.2} | {:<15.3} | {:<15.3} | {:<15.3} | {:<10.3} | {:<15}\n", 
@@ -189,24 +175,20 @@ impl MetricsCollector {
                 }
             }
             
-            // Write footer
             if let Err(e) = file.write_all(format!("{:-<130}\n\n", "").as_bytes()) {
                 println!("Failed to write to log file: {}", e);
             }
         }
     }
     
-    // Check if it's time to report metrics
     pub fn should_report(&self) -> bool {
         self.last_report_time.elapsed() >= self.report_interval
     }
     
-    // Reset the report timer
     pub fn reset_report_timer(&mut self) {
         self.last_report_time = Instant::now();
     }
     
-    // Clear metrics after reporting
     pub fn clear_metrics(&self) {
         let mut metrics_lock = self.metrics.lock().unwrap();
         for (_, metrics) in metrics_lock.iter_mut() {
@@ -215,7 +197,6 @@ impl MetricsCollector {
     }
 }
 
-// Statistics for an operation
 #[derive(Debug, Clone)]
 pub struct OperationStats {
     pub operation: String,
@@ -228,26 +209,22 @@ pub struct OperationStats {
     pub missed_deadlines: usize,
 }
 
-// Function to run the metrics collector in real-time
 pub async fn run_metrics_collector(
     config: &crate::config::MetricsConfig,
     rx: crossbeam_channel::Receiver<PerformanceMetrics>,
 ) {
     let mut collector = MetricsCollector::new(config);
-    let mut interval = time::interval(Duration::from_millis(100)); // Check every 100ms
+    let mut interval = time::interval(Duration::from_millis(100)); 
     
     loop {
-        // Wait for the next check
         interval.tick().await;
         
-        // Try to receive metrics (non-blocking)
         loop {
             match rx.try_recv() {
                 Ok(metrics) => {
                     collector.add_metrics(metrics);
                 },
                 Err(crossbeam_channel::TryRecvError::Empty) => {
-                    // No more metrics in queue
                     break;
                 },
                 Err(crossbeam_channel::TryRecvError::Disconnected) => {
@@ -257,7 +234,6 @@ pub async fn run_metrics_collector(
             }
         }
         
-        // Report metrics if it's time
         if collector.should_report() {
             let report = collector.generate_report();
             collector.log_report(&report);
