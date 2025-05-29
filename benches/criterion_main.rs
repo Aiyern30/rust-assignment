@@ -7,7 +7,8 @@ use rust_assignment::common::data_types::{SensorData, SensorType};
 use rust_assignment::sensor::generator::SensorGenerator;
 use rust_assignment::sensor::processor::DataProcessor;
 use std::hint::black_box;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub fn benchmark_generate_reading(c: &mut Criterion) {
     let mut generator =
@@ -135,6 +136,35 @@ pub fn benchmark_actuator_feedback_deserialization(c: &mut Criterion) {
     });
 }
 
+pub fn benchmark_simulated_transmission(c: &mut Criterion) {
+    let command = ActuatorCommand {
+        command_id: "CMD123".to_string(),
+        actuator_id: "ACT123".to_string(),
+        control_command: ControlCommand {
+            command_type: "SetSpeed".to_string(),
+            payload: Some("speed=50".to_string()),
+            timestamp: 1234567890,
+            value: 50.0,
+            deadline: 1234567999,
+        },
+        priority: 5,
+        deadline: 1234567999,
+        forwarded_at: Some(1234567895),
+    };
+
+    c.bench_function("simulated_transmission", |b| {
+        b.iter(|| {
+            let serialized = serde_json::to_string(&command).unwrap();
+            black_box(&serialized);
+
+            thread::sleep(Duration::from_millis(2));
+
+            let deserialized: ActuatorCommand = serde_json::from_str(&serialized).unwrap();
+            black_box(deserialized);
+        });
+    });
+}
+
 pub fn benchmark_transmitter_encode_step(c: &mut Criterion) {
     let command = ActuatorCommand {
         command_id: "CMD999".to_string(),
@@ -165,7 +195,8 @@ criterion_group!(
     benchmark_actuator_processing,
     benchmark_serialization,
     benchmark_actuator_feedback_deserialization,
-    benchmark_transmitter_encode_step
+    benchmark_transmitter_encode_step,
+    benchmark_simulated_transmission
 );
 
 criterion_main!(benches);
