@@ -12,7 +12,6 @@ pub struct PIDController {
 }
 
 impl PIDController {
-    /// Constructor to create a new PIDController with given gains
     pub fn new(kp: f64, ki: f64, kd: f64) -> Self {
         Self {
             kp,
@@ -23,7 +22,6 @@ impl PIDController {
         }
     }
 
-    /// Compute the PID control command based on setpoint, current measurement, and elapsed time dt
     pub fn compute(&mut self, setpoint: f64, measurement: f64, dt: f64) -> ControlCommand {
         let error = setpoint - measurement;
         self.integral += error * dt;
@@ -39,7 +37,7 @@ impl PIDController {
 
         ControlCommand {
             command_type: "PID_OUTPUT".to_string(),
-            payload: None, // Optional additional info, can be Some(String)
+            payload: None,
             timestamp,
             value: output,
             deadline: timestamp + 2,
