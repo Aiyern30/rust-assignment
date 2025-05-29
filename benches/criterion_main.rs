@@ -135,9 +135,8 @@ pub fn benchmark_actuator_feedback_deserialization(c: &mut Criterion) {
     });
 }
 
-/// Simulate just the encoding step in transmitter
-pub fn benchmark_transmitter_encode_step() {
-    let _command = ActuatorCommand {
+pub fn benchmark_transmitter_encode_step(c: &mut Criterion) {
+    let command = ActuatorCommand {
         command_id: "CMD999".to_string(),
         actuator_id: "A2".to_string(),
         control_command: ControlCommand {
@@ -151,6 +150,12 @@ pub fn benchmark_transmitter_encode_step() {
         deadline: 9876543210,
         forwarded_at: Some(1234567999),
     };
+
+    c.bench_function("transmitter_encode_step", |b| {
+        b.iter(|| {
+            black_box(&command);
+        });
+    });
 }
 
 criterion_group!(
@@ -160,6 +165,7 @@ criterion_group!(
     benchmark_actuator_processing,
     benchmark_serialization,
     benchmark_actuator_feedback_deserialization,
+    benchmark_transmitter_encode_step
 );
 
 criterion_main!(benches);
