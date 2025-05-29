@@ -12,27 +12,26 @@ pub struct Config {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensorConfig {
-    pub sample_rate_ms: u64,    // How often to generate sensor readings
-    pub num_sensors: usize,     // Number of sensors to simulate
-    pub enable_anomalies: bool, // Whether to intentionally generate anomalies
-    pub anomaly_rate: f64,      // Rate of anomaly generation (0.0-1.0)
+    pub sample_rate_ms: u64,
+    pub num_sensors: usize,
+    pub enable_anomalies: bool,
+    pub anomaly_rate: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessorConfig {
-    pub window_size: usize,     // Size of moving average window
-    pub anomaly_threshold: f64, // Base threshold for anomaly detection
+    pub window_size: usize,
+    pub anomaly_threshold: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricsConfig {
-    pub log_to_file: bool,       // Whether to log metrics to file
-    pub log_file: String,        // Path to log file
-    pub report_interval_ms: u64, // How often to report metrics
+    pub log_to_file: bool,
+    pub log_file: String,
+    pub report_interval_ms: u64,
 }
 
 impl Config {
-    // Load configuration from file
     pub fn from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let mut file = File::open(path)?;
         let mut contents = String::new();
@@ -41,24 +40,23 @@ impl Config {
         Ok(config)
     }
 
-    // Get default configuration
     pub fn default() -> Self {
         Self {
             sensor: SensorConfig {
-                sample_rate_ms: 5,      // 5ms sample rate
-                num_sensors: 3,         // 3 sensors
-                enable_anomalies: true, // Enable anomaly generation
-                anomaly_rate: 0.01,     // 1% anomaly rate
+                sample_rate_ms: 5,
+                num_sensors: 3,
+                enable_anomalies: true,
+                anomaly_rate: 0.01,
             },
             processor: ProcessorConfig {
-                window_size: 20,        // 20 samples window
-                anomaly_threshold: 3.0, // 3 standard deviations
+                window_size: 20,
+                anomaly_threshold: 3.0,
             },
 
             metrics: MetricsConfig {
-                log_to_file: true,                   // Log metrics to file
-                log_file: "metrics.log".to_string(), // Default log file
-                report_interval_ms: 1000,            // Report every second
+                log_to_file: true,
+                log_file: "metrics.log".to_string(),
+                report_interval_ms: 1000,
             },
         }
     }

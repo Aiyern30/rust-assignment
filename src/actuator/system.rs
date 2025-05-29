@@ -39,7 +39,6 @@ pub async fn run_actuator_system(
 
     let publish_channel = channel.clone();
 
-    // ✅ Create async feedback channel using tokio
     let (publish_tx, mut publish_rx) = mpsc::unbounded_channel::<ActuatorFeedback>();
 
     tokio::spawn(async move {
@@ -86,7 +85,7 @@ pub async fn run_actuator_system(
             let command: ActuatorCommand = match serde_json::from_slice(&delivery.data) {
                 Ok(cmd) => cmd,
                 Err(e) => {
-                    eprintln!("⚠️ Failed to deserialize actuator command: {}", e);
+                    eprintln!("Failed to deserialize actuator command: {}", e);
                     delivery.nack(BasicNackOptions::default()).await?;
                     continue;
                 }

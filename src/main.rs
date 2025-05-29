@@ -62,7 +62,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             });
 
-            // Spawn a dispatcher task that reads from sensor_rx_main and forwards to actuator and processor channels
             tokio::spawn(async move {
                 loop {
                     match sensor_rx_main.recv() {
@@ -78,7 +77,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             });
 
-            // Spawn feedback listener task
             tokio::spawn(async move {
                 while let Ok(feedback) = feedback_rx.recv() {
                     println!("Received actuator feedback: {:?}", feedback);
@@ -86,19 +84,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             });
 
-            // Spawn actuator system task with actuator's sensor receiver
             tokio::spawn(async move {
                 let _ =
                     run_actuator_system(sensor_rx_actuator, feedback_tx, actuator_command_tx).await;
             });
 
-            // Spawn metrics collector task
             let metrics_config = config.metrics.clone();
             tokio::spawn(async move {
                 common::metrics::run_metrics_collector(&metrics_config, metrics_rx).await;
             });
 
-            // Spawn sensor generator task
             let sensor_config = config.sensor.clone();
             let sensor_metrics_tx = metrics_tx.clone();
             tokio::spawn(async move {
@@ -106,11 +101,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .await;
             });
 
-            // Clone actuator_tx for processor and transmitter
             let actuator_tx_for_processor = actuator_tx.clone();
             let _actuator_tx_for_transmitter = actuator_tx.clone();
 
-            // Spawn processor task with processor's sensor receiver
             let processor_config = config.processor.clone();
             let processor_metrics_tx = metrics_tx.clone();
             tokio::spawn(async move {

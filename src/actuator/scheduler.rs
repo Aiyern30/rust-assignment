@@ -23,7 +23,7 @@ impl Scheduler {
         F: FnMut(String, ActuatorCommand) + Send + 'static,
     {
         let interval = self.interval;
-        let overheat_flag = Arc::new(Mutex::new(false)); // shared overheat state
+        let overheat_flag = Arc::new(Mutex::new(false));
 
         thread::spawn({
             let command_map = Arc::clone(&command_map);
@@ -37,24 +37,20 @@ impl Scheduler {
 
                     let mut map = command_map.lock().unwrap();
                     for (actuator_id, queue) in map.iter_mut() {
-                        // Sort the queue by priority descending
                         queue.sort_by(|a, b| b.priority.cmp(&a.priority));
 
                         if let Some(command) = queue.pop() {
                             let cmd_type = &command.control_command.command_type;
                             let value = command.control_command.value;
 
-                            // Update overheat status
                             if cmd_type == "RegulateTemperature" && value >= 80.0 {
                                 *overheat_flag.lock().unwrap() = true;
                             } else if cmd_type == "RegulateTemperature" && value <= 30.0 {
                                 *overheat_flag.lock().unwrap() = false;
                             }
 
-                            // If overheat is active, only allow RegulateTemperature
                             let is_overheat = *overheat_flag.lock().unwrap();
                             if is_overheat && cmd_type != "RegulateTemperature" {
-                                // Push back into queue and skip for now
                                 queue.insert(0, command);
                                 continue;
                             }
@@ -67,7 +63,6 @@ impl Scheduler {
                                 println!("⏱️ Scheduler delay for [{}]: {} ms", actuator_id, delay);
                             }
 
-                            // Run the task
                             task_fn(actuator_id.clone(), command);
                         }
                     }

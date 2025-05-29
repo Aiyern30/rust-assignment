@@ -22,22 +22,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 async fn main() -> anyhow::Result<()> {
     println!("ACTUATOR system started.");
 
-    // Channels
     let (_sensor_data_tx, sensor_data_rx): (Sender<SensorData>, Receiver<SensorData>) = unbounded();
     let (command_tx, command_rx): (Sender<ActuatorCommand>, Receiver<ActuatorCommand>) =
         unbounded();
     let (feedback_tx, feedback_rx): (Sender<ActuatorFeedback>, Receiver<ActuatorFeedback>) =
         unbounded();
 
-    // Shared state
     let metrics = Arc::new(MetricsCollector::new(&MetricsConfig {
         log_to_file: false,
         log_file: "".into(),
         report_interval_ms: 1000,
     }));
-    // let metrics = Arc::new(MetricsCollector::new(&metrics_config));
     let shared_sensor_data = Arc::new(Mutex::new(None));
-    // let last_data = Arc::new(Mutex::new(None));
     {
         let mut receiver = ReceiverTask::new(
             sensor_data_rx.clone(),
