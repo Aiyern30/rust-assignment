@@ -29,11 +29,10 @@ pub async fn run_transmitter(
         )
         .await?;
 
-    // Listen for feedback
     let feedback_channel = channel.clone();
     let tx_clone = feedback_tx.clone();
     tokio::spawn(async move {
-        use futures::StreamExt; // ⬅ Add this line to fix `.next()`
+        use futures::StreamExt;
         let mut consumer = feedback_channel
             .basic_consume(
                 ACTUATOR_FEEDBACK_QUEUE,
@@ -54,9 +53,8 @@ pub async fn run_transmitter(
         }
     });
 
-    // Send commands
     while let Ok(command) = command_rx.recv() {
-        let data = serde_json::to_vec(&command)?; // ⬅ command must derive Serialize
+        let data = serde_json::to_vec(&command)?;
         channel
             .basic_publish(
                 "",
