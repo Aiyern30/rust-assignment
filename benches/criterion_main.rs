@@ -119,7 +119,6 @@ pub fn benchmark_serialization(c: &mut Criterion) {
     });
 }
 
-/// Benchmark ActuatorFeedback deserialization
 pub fn benchmark_actuator_feedback_deserialization(c: &mut Criterion) {
     let json = br#"{
         "actuator_id": "A1",

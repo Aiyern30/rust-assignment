@@ -30,23 +30,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Commands::Run { config, .. } => {
-            // Load configuration
             let config = match config {
                 Some(path) => config::Config::from_file(path.to_str().unwrap())?,
                 None => config::Config::default(),
             };
 
-            // Create main sensor channel
             let (sensor_tx, sensor_rx_main) = bounded::<common::data_types::SensorData>(100);
 
-            // Create fan-out channels for actuator system and processor
             let (sensor_tx_actuator, sensor_rx_actuator) =
                 bounded::<common::data_types::SensorData>(100);
             let (sensor_tx_processor, sensor_rx_processor) =
                 bounded::<common::data_types::SensorData>(100);
             let (actuator_command_tx, actuator_command_rx) = crossbeam_channel::unbounded();
 
-            // Other channels
             let (processed_tx, _processed_rx) = bounded::<common::data_types::SensorData>(100);
             let (metrics_tx, metrics_rx) = unbounded::<common::data_types::PerformanceMetrics>();
             let (actuator_tx, actuator_rx) = bounded::<common::data_types::ActuatorCommand>(100);
@@ -71,7 +67,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 loop {
                     match sensor_rx_main.recv() {
                         Ok(data) => {
-                            // Clone data to send to both consumers
                             let _ = sensor_tx_actuator.send(data.clone());
                             let _ = sensor_tx_processor.send(data);
                         }
@@ -133,13 +128,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 while let Ok(command) = actuator_command_rx.recv() {
                     println!("Received external actuator command: {:?}", command);
 
-                    // Forward the command to the actuator system
                     if let Err(e) = actuator_tx.send(command) {
                         eprintln!("Failed to forward actuator command: {:?}", e);
                     }
                 }
             });
-            // Keep running
             println!("System running. Press Ctrl+C to stop.");
             tokio::signal::ctrl_c().await?;
             println!("Shutting down...");

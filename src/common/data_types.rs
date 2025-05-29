@@ -1,16 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
-// Main data structure for sensor readings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensorData {
-    pub timestamp: u128,          // Timestamp in milliseconds
-    pub sensor_id: String,        // Unique identifier for the sensor
-    pub reading_type: SensorType, // Type of sensor
-    pub value: f64,               // Actual sensor reading
-    pub is_anomaly: bool,         // Flag for anomalies
-    pub confidence: f64,          // Confidence level (0.0-1.0)
-    pub forwarded_at: u128,       // Timestamp when data was forwarded
+    pub timestamp: u128,
+    pub sensor_id: String,
+    pub reading_type: SensorType,
+    pub value: f64,
+    pub is_anomaly: bool,
+    pub confidence: f64,
+    pub forwarded_at: u128,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControlCommand {
@@ -21,15 +20,6 @@ pub struct ControlCommand {
     pub deadline: u128,
 }
 
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// pub struct ActuatorCommand {
-//     pub command_id: String,
-//     pub actuator_id: String,
-//     pub value: f64,
-//     pub priority: u8,
-//     pub deadline: u128,
-// }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActuatorCommand {
     pub command_id: String,
@@ -37,19 +27,17 @@ pub struct ActuatorCommand {
     pub control_command: ControlCommand,
     pub priority: u8,
     pub deadline: u128,
-    pub forwarded_at: Option<u128>, // Timestamp when command was forwarded
+    pub forwarded_at: Option<u128>,
 }
 
-// Types of sensors we might simulate
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum SensorType {
-    Force,       // Force sensor (Newtons)
-    Position,    // Position sensor (mm)
-    Velocity,    // Velocity sensor (mm/s)
-    Temperature, // Temperature sensor (Celsius)
+    Force,
+    Position,
+    Velocity,
+    Temperature,
 }
 
-// Feedback from the actuator system
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActuatorFeedback {
     pub timestamp: u128,
@@ -69,7 +57,6 @@ pub enum ActuatorStatus {
     InProgress,
 }
 
-// Metrics for performance benchmarking
 #[derive(Debug, Clone)]
 pub struct PerformanceMetrics {
     pub operation: String,
@@ -99,8 +86,6 @@ impl PerformanceMetrics {
 }
 
 impl SensorData {
-    /// Detects if the value is anomalous based on z-score and thresholds.
-    /// Requires mean and std_dev to calculate z-score.
     pub fn detect_anomaly(&mut self, mean: f64, std_dev: f64, threshold: f64) {
         if std_dev > 0.0 {
             let z_score = (self.value - mean).abs() / std_dev;
@@ -123,13 +108,13 @@ impl SensorData {
         }
     }
 }
+
+#[allow(dead_code)]
 impl ActuatorCommand {
     pub fn from_sensor_data(data: &SensorData) -> Self {
-        // Determine actuator_id from sensor_id (example logic)
         let actuator_id = format!("actuator_for_{}", data.sensor_id);
         let command_id = format!("cmd_{}", data.sensor_id);
 
-        // Example: command_type depends on sensor reading type
         let command_type = match data.reading_type {
             SensorType::Force => "AdjustForce",
             SensorType::Position => "MovePosition",
@@ -138,15 +123,10 @@ impl ActuatorCommand {
         }
         .to_string();
 
-        // Payload could be some JSON or string representing the command parameters,
-        // here we just serialize the value as string for simplicity
         let payload = Some(format!("{{\"value\": {:.2}}}", data.value));
 
-        // Set priority higher if anomaly detected, else default 5
         let priority = if data.is_anomaly { 10 } else { 5 };
 
-        // Deadline example: 1 second from now
-        // let deadline = Instant::now() + std::time::Duration::from_secs(1);
         let deadline = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -167,7 +147,7 @@ impl ActuatorCommand {
             control_command,
             priority,
             deadline,
-            forwarded_at: None, // This will be set when the command is forwarded
+            forwarded_at: None,
         }
     }
 }
