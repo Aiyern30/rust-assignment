@@ -7,11 +7,13 @@ use crate::common::{
 };
 use std::sync::{Arc, Mutex};
 
+#[allow(dead_code)]
 pub struct ReceiverTask {
     rx: Receiver<SensorData>,
-    metrics_collector: Arc<MetricsCollector>, // Use Arc for shared ownership
+    metrics_collector: Arc<MetricsCollector>,
     shared_sensor_data: Arc<Mutex<Option<SensorData>>>,
 }
+#[allow(dead_code)]
 
 impl ReceiverTask {
     pub fn new(
@@ -28,7 +30,7 @@ impl ReceiverTask {
 
     pub fn run(&mut self) {
         println!("Actuator receiver started.");
-        while let Ok(mut sensor_data) = self.rx.recv() {
+        while let Ok(sensor_data) = self.rx.recv() {
             let start_time = std::time::Instant::now();
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
