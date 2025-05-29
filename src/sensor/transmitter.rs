@@ -3,6 +3,8 @@ use crate::common::data_types::{ActuatorCommand, ActuatorFeedback};
 use crossbeam_channel::{Receiver, Sender};
 use lapin::{options::*, types::FieldTable, BasicProperties, Connection, ConnectionProperties};
 use serde_json;
+
+#[allow(dead_code)]
 pub async fn run_transmitter(
     command_rx: Receiver<ActuatorCommand>,
     feedback_tx: Sender<ActuatorFeedback>,
