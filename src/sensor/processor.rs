@@ -24,13 +24,11 @@ impl DataProcessor {
             ActuatorStatus::Warning => {
                 if let Some(msg) = &feedback.message {
                     if msg.contains("Deadline missed") {
-                        // Example: increase thresholds for the related sensor type to reduce sensitivity
                         println!(
                         "Warning received: Deadline missed, increasing threshold for actuator {}",
                         feedback.actuator_id
                     );
 
-                        // You need a way to map actuator_id back to SensorType, assuming a naming convention:
                         if let Some(sensor_type) =
                             self.actuator_id_to_sensor_type(&feedback.actuator_id)
                         {
@@ -39,7 +37,7 @@ impl DataProcessor {
                                 .get(&sensor_type)
                                 .cloned()
                                 .unwrap_or(3.0);
-                            let new_threshold = current_threshold + 0.5; // increase by 0.5 or a suitable value
+                            let new_threshold = current_threshold + 0.5;
                             self.adjust_threshold(sensor_type, new_threshold);
                             println!(
                                 "Threshold for {:?} adjusted to {}",
@@ -60,7 +58,7 @@ impl DataProcessor {
                                 .get(&sensor_type)
                                 .cloned()
                                 .unwrap_or(3.0);
-                            let new_threshold = (current_threshold + 0.2).min(10.0); // upper cap
+                            let new_threshold = (current_threshold + 0.2).min(10.0);
                             self.adjust_threshold(sensor_type, new_threshold);
                             println!(
                                 "Adjusting: Increasing threshold for {:?} to {}",
@@ -76,7 +74,7 @@ impl DataProcessor {
                                 .get(&sensor_type)
                                 .cloned()
                                 .unwrap_or(3.0);
-                            let new_threshold = (current_threshold - 0.2).max(0.1); // lower cap
+                            let new_threshold = (current_threshold - 0.2).max(0.1);
                             self.adjust_threshold(sensor_type, new_threshold);
                             println!(
                                 "Adjusting: Decreasing threshold for {:?} to {}",
@@ -90,13 +88,10 @@ impl DataProcessor {
             | ActuatorStatus::Success
             | ActuatorStatus::InProgress
             | ActuatorStatus::Failure
-            | ActuatorStatus::Error => {
-                // Optionally handle other statuses if needed
-            }
+            | ActuatorStatus::Error => {}
         }
     }
 
-    /// Helper method to map actuator_id to SensorType
     fn actuator_id_to_sensor_type(&self, actuator_id: &str) -> Option<SensorType> {
         if actuator_id.contains("force_sensor") {
             Some(SensorType::Force)
@@ -143,10 +138,8 @@ impl DataProcessor {
             .cloned()
             .unwrap_or(3.0);
 
-        // Update value with filtered (smoothed) value
         raw_data.value = filtered_value;
 
-        // Call the unified anomaly detection method on SensorData
         raw_data.detect_anomaly(filtered_value, moving_avg.std_dev, threshold);
 
         metrics.complete(true);
@@ -169,12 +162,11 @@ impl DataProcessor {
                         + 2,
                 },
                 priority: 1,
-                // deadline: Instant::now() + Duration::from_millis(2),
                 deadline: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
                     .as_millis()
-                    + 2000, // 2 seconds from now
+                    + 2000,
                 forwarded_at: Some(current_timestamp_ms().into()),
             })
         } else {

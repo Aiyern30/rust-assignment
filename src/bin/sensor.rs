@@ -29,13 +29,11 @@ async fn main() -> anyhow::Result<()> {
         anomaly_rate: 0.01,
     };
 
-    // Start the sensor
     let config_clone = config.clone();
     tokio::spawn(async move {
         run_sensor_array(&config_clone, sensor_tx.clone(), metrics_tx.clone()).await;
     });
 
-    // Convert SensorData into ActuatorCommand
     let send_timestamps_clone = Arc::clone(&send_timestamps);
     tokio::spawn({
         let command_tx = command_tx.clone();
@@ -57,7 +55,6 @@ async fn main() -> anyhow::Result<()> {
     let completed: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
     let mut value_map: HashMap<String, f64> = HashMap::new();
 
-    // Listen for feedback
     while let Ok(feedback) = feedback_rx.recv() {
         if let Some(value) = value_map.get_mut(&feedback.actuator_id) {
             match feedback.message.as_deref() {

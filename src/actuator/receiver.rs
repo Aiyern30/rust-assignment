@@ -48,18 +48,15 @@ impl ReceiverTask {
 
             self.metrics_collector._record_sensor_data(&sensor_data);
 
-            // Update the shared sensor data
             {
                 let mut data_lock = self.shared_sensor_data.lock().unwrap();
                 *data_lock = Some(sensor_data.clone());
             }
 
-            // Process sensor_data here
             println!("Received sensor data: {:?}", sensor_data);
 
-            // Calculate end_time and duration
             let end_time = std::time::Instant::now();
-            let duration = end_time.duration_since(start_time).as_secs_f64() * 1000.0; // in ms
+            let duration = end_time.duration_since(start_time).as_secs_f64() * 1000.0;
 
             let perf_metrics = PerformanceMetrics {
                 operation: "sensor_receive".to_string(),
@@ -69,7 +66,6 @@ impl ReceiverTask {
                 success: true,
             };
 
-            // Add metrics to collector
             self.metrics_collector.add_metrics(perf_metrics);
         }
         println!("Receiver channel closed, stopping receiver.");

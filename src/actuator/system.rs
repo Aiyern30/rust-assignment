@@ -95,7 +95,6 @@ pub async fn run_actuator_system(
             println!("📥 Received ActuatorCommand: {:?}", command);
             let _ = command_tx.send(command.clone());
 
-            // ✅ Use InProgress instead of Received
             let feedback = ActuatorFeedback {
                 timestamp: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -145,7 +144,7 @@ pub fn initialize_actuator_control_system(
             }
         });
     }
-    let scheduler = Scheduler::new(5); // 5ms
+    let scheduler = Scheduler::new(5);
     let ctrl = Arc::clone(&controller);
     let exec = Arc::clone(&executor);
     let shared_map = Arc::clone(&command_map);
@@ -154,7 +153,6 @@ pub fn initialize_actuator_control_system(
     let overheat_flag_clone = Arc::clone(&overheat_flag);
 
     scheduler.start(shared_map, move |actuator_id, command| {
-        // Delay since receiver forwarded the command
         if let Some(fwd_at) = command.forwarded_at {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -167,7 +165,6 @@ pub fn initialize_actuator_control_system(
             );
         }
 
-        // Ensure target value is available
         let target = {
             let mut map = tgt.lock().unwrap();
             map.entry(actuator_id.clone())
@@ -181,8 +178,7 @@ pub fn initialize_actuator_control_system(
 
         let maybe_data = shared_sensor.lock().unwrap().clone();
         if let Some(sensor_data) = maybe_data {
-            // Check for overheating condition
-            let is_overheating = sensor_data.value > 90.0; // Temperature threshold
+            let is_overheating = sensor_data.value > 90.0;
             {
                 let mut overheat = overheat_flag_clone.lock().unwrap();
                 if is_overheating && !*overheat {
@@ -200,7 +196,6 @@ pub fn initialize_actuator_control_system(
                 }
             }
 
-            // Skip control if overheating
             let is_currently_overheating = *overheat_flag_clone.lock().unwrap();
             if is_currently_overheating {
                 println!(
@@ -238,14 +233,12 @@ pub fn initialize_actuator_control_system(
                 .unwrap()
                 .as_millis();
 
-            // Calculate control execution time using control_start
             let control_duration = execution_end_time - control_start;
             println!(
                 "⏱️ Control execution time for [{}]: {} ms",
                 actuator_id, control_duration
             );
 
-            // Check if converged
             let diff = target - sensor_data.value;
             let adjustment = diff.clamp(-10.0, 10.0);
             let new_value = sensor_data.value + adjustment;

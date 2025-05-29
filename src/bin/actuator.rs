@@ -57,7 +57,6 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // 🟢 Start RabbitMQ connection
     let conn =
         Connection::connect("amqp://127.0.0.1:5672/%2f", ConnectionProperties::default()).await?;
     let channel = conn.create_channel().await?;
@@ -68,7 +67,6 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // Declare queues
     channel
         .queue_declare(
             "actuator_command_queue",
@@ -84,7 +82,6 @@ async fn main() -> anyhow::Result<()> {
         )
         .await?;
 
-    // Start command consumer
     let mut consumer = channel
         .basic_consume(
             "actuator_command_queue",
@@ -94,15 +91,12 @@ async fn main() -> anyhow::Result<()> {
         )
         .await?;
 
-    // Executor and PID controller
     let executor = Executor::new();
     let mut pid = PIDController::new(1.0, 0.1, 0.05);
 
-    // Listen for commands from RabbitMQ
     println!("Waiting for actuator commands...");
     while let Some(delivery) = consumer.next().await {
         if let Ok(delivery) = delivery {
-            // let target_value = rand::thread_rng().gen_range(30.0..70.0);
             let command_receive_time = std::time::Instant::now();
             let command: ActuatorCommand = serde_json::from_slice(&delivery.data)?;
             let mut target_map = target_map.lock().unwrap();
@@ -116,12 +110,10 @@ async fn main() -> anyhow::Result<()> {
             println!("  → priority: {}", command.priority);
             println!("  → deadline: {}", command.deadline);
 
-            // Simulate sensor feedback (example)
-            let measurement = command.control_command.value * 0.95; // pretend current state
+            let measurement = command.control_command.value * 0.95;
             let dt = 0.01;
             let control = pid.compute(command.control_command.value, measurement, dt);
 
-            // Execute the control
             executor.execute(control.clone());
 
             let elapsed = command_receive_time.elapsed().as_millis();
@@ -136,20 +128,10 @@ async fn main() -> anyhow::Result<()> {
                 .as_millis();
 
             let missed_deadline = now > command.deadline;
-            // let is_within_tolerance = (sensor_data.value - *target).abs() <= 0.1;
-            // let tolerance = (command.control_command.value.abs()) * 0.1;
-            // let is_within_tolerance =
-            //     (command.control_command.value - control.value).abs() <= tolerance;
 
             let mut _is_within_tolerance = false;
             let tolerance = 0.5;
             let sensor_value = command.control_command.value;
-
-            //if (sensor_value >= target_value - tolerance) && (sensor_value <= target_value + tolerance) {
-            //     is_within_tolerance = true;
-            // } else {
-            //     is_within_tolerance = false;
-            // }
 
             _is_within_tolerance = (sensor_value - target_value).abs() <= tolerance;
 
@@ -165,11 +147,9 @@ async fn main() -> anyhow::Result<()> {
                 command.actuator_id, feedback_msg
             );
 
-            // Send feedback
             let feedback = ActuatorFeedback {
                 timestamp: Utc::now().timestamp_millis() as u128,
                 actuator_id: command.actuator_id.clone(),
-                // status: ActuatorStatus::Success,
                 status: if missed_deadline {
                     ActuatorStatus::Warning
                 } else if _is_within_tolerance {
@@ -177,10 +157,7 @@ async fn main() -> anyhow::Result<()> {
                 } else {
                     ActuatorStatus::Adjusting
                 },
-                // message: Some(format!(
-                //     "Executed command_type: {}",
-                //     command.control_command.command_type
-                // )),
+
                 message: if missed_deadline {
                     Some(format!(
                         "❌ Deadline missed: now = {}, deadline = {}",
