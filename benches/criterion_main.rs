@@ -157,6 +157,9 @@ criterion_group!(
     benches,
     benchmark_generate_reading,
     benchmark_processor,
+    benchmark_actuator_processing,
     benchmark_serialization,
+    benchmark_actuator_feedback_deserialization,
 );
+
 criterion_main!(benches);
