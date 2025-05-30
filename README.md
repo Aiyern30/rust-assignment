@@ -60,7 +60,7 @@ rust-assignment/
 1.  Start RabbitMQ (Docker)
 
 ```
-docker run -d --name rabbitmq -p 5672:5672 rabbitmq:3-management
+docker run -d --hostname rmq --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 ```
 
 2. Build the project
@@ -83,17 +83,12 @@ cargo run --bin actuator
 
 ## Features
 
-- Sensor data generation with realistic noise and drift
-
-- Anomaly detection using threshold-based filtering
-
-- Actuator control using PID feedback loops
-
-- Asynchronous messaging with lapin and RabbitMQ
-
-- Shared-state management with Arc<Mutex<T>>
-
-- Performance benchmarking using Criterion.rs
+- ✅ Sensor data generation with realistic noise and drift
+- ⚠️ Anomaly detection using threshold-based filtering
+- 🧠 Actuator control using PID feedback loops
+- 🔄 Asynchronous messaging with `lapin` and RabbitMQ
+- 🧵 Shared-state management using `Arc<Mutex<T>>`
+- 📈 Performance benchmarking using Criterion.rs
 
 ## Authors
 
