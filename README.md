@@ -54,3 +54,49 @@ rust-assignment/
 ```
 
 ---
+
+## How to Run
+
+1.  Start RabbitMQ (Docker)
+
+```
+docker run -d --name rabbitmq -p 5672:5672 rabbitmq:3-management
+```
+
+2. Build the project
+
+```
+cargo build
+```
+
+3. Run the sensor system (in one terminal)
+
+```
+cargo run --bin sensor
+```
+
+4. Run the actuator system (in a second terminal)
+
+```
+cargo run --bin actuator
+```
+
+## Features
+
+- Sensor data generation with realistic noise and drift
+
+- Anomaly detection using threshold-based filtering
+
+- Actuator control using PID feedback loops
+
+- Asynchronous messaging with lapin and RabbitMQ
+
+- Shared-state management with Arc<Mutex<T>>
+
+- Performance benchmarking using Criterion.rs
+
+## Authors
+
+- Student A – Sensor Data Specialist
+
+- Student B – Actuator Commander
